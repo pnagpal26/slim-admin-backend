@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminToken, ADMIN_COOKIE_NAME } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
