@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 interface Customer {
   id: string
@@ -84,6 +84,7 @@ function formatRelative(d: string | null): string {
 
 export default function CustomersPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -94,6 +95,19 @@ export default function CustomersPage() {
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
+  const [successMessage, setSuccessMessage] = useState('')
+
+  // Show success message if redirected after deletion
+  useEffect(() => {
+    if (searchParams.get('deleted') === '1') {
+      setSuccessMessage('Customer deleted successfully')
+      // Clear the URL parameter without refresh
+      window.history.replaceState({}, '', '/customers')
+      // Auto-hide after 5 seconds
+      const timer = setTimeout(() => setSuccessMessage(''), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [searchParams])
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
@@ -104,9 +118,16 @@ export default function CustomersPage() {
     params.set('sort', sort)
     params.set('order', order)
     params.set('page', String(page))
+    params.set('_t', String(Date.now())) // Cache buster
 
     try {
-      const res = await fetch(`/api/customers/list?${params}`)
+      const res = await fetch(`/api/customers/list?${params}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+      })
       if (!res.ok) {
         if (res.status === 401) {
           router.push('/login')
@@ -169,6 +190,16 @@ export default function CustomersPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6">
+        {/* Success message */}
+        {successMessage && (
+          <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded flex items-center justify-between">
+            <span>{successMessage}</span>
+            <button onClick={() => setSuccessMessage('')} className="text-green-700 hover:text-green-900">
+              &times;
+            </button>
+          </div>
+        )}
+
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <input

@@ -341,8 +341,8 @@ export default function CustomerDetailPage() {
       })
       const data = await res.json()
       if (!res.ok) { setDeleteError(data.error); return }
-      // Redirect to customers list with success message
-      router.push('/customers?deleted=1')
+      // Hard redirect to customers list to avoid stale cache
+      window.location.href = '/customers?deleted=1'
     } catch {
       setDeleteError('Network error')
     } finally {
