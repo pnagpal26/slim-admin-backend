@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { requireRole, handleApiError, computeCustomerStatus } from '@/lib/api-helpers'
+import { formatTeamName, formatPersonName } from '@/lib/utils/format'
 
 export async function GET(req: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
     const { data: team, error: teamError } = await supabase
       .from('teams')
       .select(`
-        id, name, plan_tier, billing_exempt, created_at, updated_at, trial_ends_at,
+        id, name, plan_tier, billing_exempt, created_at, trial_ends_at,
         stripe_customers(
           stripe_customer_id, stripe_subscription_id, subscription_status,
           cancel_at_period_end, current_period_end, created_at
@@ -120,10 +121,15 @@ export async function GET(req: NextRequest) {
     }
     const planLimit = planLimits[team.plan_tier] || 5
 
+    // Format team name - strip "'s Lockboxes" suffix for cleaner display
+    const teamNameFormatted = formatTeamName(team.name)
+
     return NextResponse.json({
       account: {
         id: team.id,
-        team_name: team.name,
+        team_name: teamNameFormatted.displayName,
+        team_name_full: teamNameFormatted.fullName,
+        team_name_has_suffix: teamNameFormatted.hasSuffix,
         plan_tier: team.plan_tier,
         billing_exempt: team.billing_exempt,
         signup_date: team.created_at,
@@ -131,7 +137,7 @@ export async function GET(req: NextRequest) {
         last_login: lastLogin,
         status,
         leader: leader
-          ? { id: leader.id, name: leader.name, email: leader.email, phone: leader.phone }
+          ? { id: leader.id, name: formatPersonName(leader.name), email: leader.email, phone: leader.phone }
           : null,
         stripe: stripeData
           ? {
@@ -146,8 +152,14 @@ export async function GET(req: NextRequest) {
         plan_limit: planLimit,
         usage_percent: planLimit > 0 ? Math.round((usageSummary.installed / planLimit) * 100) : 0,
       },
-      members: members || [],
-      invitations: invitations || [],
+      members: (members || []).map((m) => ({
+        ...m,
+        name: formatPersonName(m.name),
+      })),
+      invitations: (invitations || []).map((inv) => ({
+        ...inv,
+        name: formatPersonName(inv.name),
+      })),
       recent_activity: (activity || []).map((a: Record<string, unknown>) => ({
         id: a.id,
         action: a.action,
@@ -155,7 +167,12 @@ export async function GET(req: NextRequest) {
         action_method: a.action_method,
         details: a.details,
         lockbox_id: a.lockbox_id,
-        user: a.users || null,
+        user: a.users
+          ? {
+              ...(a.users as Record<string, unknown>),
+              name: formatPersonName((a.users as Record<string, unknown>).name as string),
+            }
+          : null,
       })),
     })
   } catch (error) {

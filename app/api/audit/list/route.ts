@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { requireRole, handleApiError } from '@/lib/api-helpers'
+import { formatTeamName, formatPersonName } from '@/lib/utils/format'
 
 const PAGE_SIZE = 100
 
@@ -108,14 +109,34 @@ export async function GET(req: NextRequest) {
       adminCount = aCount || 0
     }
 
+    // Helper to format user object
+    const formatUser = (user: Record<string, unknown> | null) => {
+      if (!user) return null
+      return {
+        ...user,
+        name: formatPersonName(user.name as string),
+      }
+    }
+
+    // Helper to format team object
+    const formatTeam = (team: Record<string, unknown> | null) => {
+      if (!team) return null
+      const formatted = formatTeamName(team.name as string)
+      return {
+        ...team,
+        name: formatted.displayName,
+        name_full: formatted.fullName,
+      }
+    }
+
     // Normalize and merge both sources
     const normalizedCustomer = ((entries || []) as Record<string, unknown>[]).map((e) => ({
       id: e.id,
       source: 'customer',
       timestamp: e.performed_at,
       action: e.action,
-      user: e.users || null,
-      team: (e.lockboxes as Record<string, unknown>)?.teams || null,
+      user: formatUser(e.users as Record<string, unknown> | null),
+      team: formatTeam((e.lockboxes as Record<string, unknown>)?.teams as Record<string, unknown> | null),
       lockbox_id: (e.lockboxes as Record<string, unknown>)?.lockbox_id || null,
       details: e.details || e.after_state || null,
       action_method: e.action_method,
@@ -126,8 +147,8 @@ export async function GET(req: NextRequest) {
       source: 'admin',
       timestamp: a.performed_at,
       action: a.action_type,
-      user: a.admin_users || null,
-      team: a.teams || null,
+      user: formatUser(a.admin_users as Record<string, unknown> | null),
+      team: formatTeam(a.teams as Record<string, unknown> | null),
       lockbox_id: null,
       details: a.details || null,
       action_method: 'admin',

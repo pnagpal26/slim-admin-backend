@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { requireRole, handleApiError, computeCustomerStatus } from '@/lib/api-helpers'
+import { formatTeamName, formatPersonName } from '@/lib/utils/format'
 
 const PAGE_SIZE = 50
 
@@ -67,11 +68,16 @@ export async function GET(req: NextRequest) {
       const stripe = team.stripe_customers?.[0] || null
       const status = computeCustomerStatus(team.plan_tier, stripe)
 
+      // Format team name - strip "'s Lockboxes" suffix for cleaner display
+      const teamNameFormatted = formatTeamName(team.name)
+
       return {
         id: team.id,
-        team_name: team.name,
+        team_name: teamNameFormatted.displayName,
+        team_name_full: teamNameFormatted.fullName,
+        team_name_has_suffix: teamNameFormatted.hasSuffix,
         contact_email: leader?.email || 'N/A',
-        contact_name: leader?.name || 'N/A',
+        contact_name: formatPersonName(leader?.name) || 'N/A',
         plan_tier: team.plan_tier,
         billing_exempt: team.billing_exempt,
         signup_date: team.created_at,

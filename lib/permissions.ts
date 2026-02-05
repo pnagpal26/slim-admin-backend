@@ -7,6 +7,8 @@ const PERMISSIONS = {
   // Customer actions
   extend_trial: ['super_admin', 'support_l2'],
   comp_month: ['super_admin', 'support_l2'],
+  edit_customer: ['super_admin', 'support_l2'],
+  delete_customer: ['super_admin'],
 
   // Error management
   mark_error_resolved: ['super_admin', 'support_l1', 'support_l2'],
