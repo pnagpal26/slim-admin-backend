@@ -6,8 +6,6 @@ import { useRouter, useParams } from 'next/navigation'
 interface AccountInfo {
   id: string
   team_name: string
-  team_name_full: string
-  team_name_has_suffix: boolean
   plan_tier: string
   billing_exempt: boolean
   signup_date: string
@@ -259,8 +257,7 @@ export default function CustomerDetailPage() {
 
   function openEditModal() {
     if (account) {
-      // Use full team name for editing (with suffix if present)
-      setEditTeamName(account.team_name_full || account.team_name)
+      setEditTeamName(account.team_name)
       setEditLeaderName(account.leader?.name || '')
       setEditLeaderEmail(account.leader?.email || '')
       setEditLeaderPhone(account.leader?.phone || '')
@@ -306,8 +303,6 @@ export default function CustomerDetailPage() {
       setAccount((prev) => prev ? {
         ...prev,
         team_name: data.team_name,
-        team_name_full: data.team_name_full,
-        team_name_has_suffix: data.team_name_has_suffix,
         leader: data.leader,
       } : prev)
     } catch {
@@ -393,14 +388,7 @@ export default function CustomerDetailPage() {
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div>
-                <h1 className="text-xl font-semibold text-gray-900" title={account.team_name_has_suffix ? account.team_name_full : undefined}>
-                  {account.team_name}
-                </h1>
-                {account.team_name_has_suffix && (
-                  <p className="text-xs text-gray-400">{account.team_name_full}</p>
-                )}
-              </div>
+              <h1 className="text-xl font-semibold text-gray-900">{account.team_name}</h1>
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[account.status] || ''}`}>
                 {STATUS_LABELS[account.status] || account.status}
               </span>

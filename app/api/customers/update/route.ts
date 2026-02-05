@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { requireRole, handleApiError, logAdminAction } from '@/lib/api-helpers'
-import { toTitleCase, formatTeamName } from '@/lib/utils/format'
+import { toTitleCase } from '@/lib/utils/format'
 
 export async function POST(req: NextRequest) {
   try {
@@ -109,14 +109,9 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // Format team name for display
-    const teamNameFormatted = formatTeamName(afterState.team_name)
-
     return NextResponse.json({
       success: true,
-      team_name: teamNameFormatted.displayName,
-      team_name_full: teamNameFormatted.fullName,
-      team_name_has_suffix: teamNameFormatted.hasSuffix,
+      team_name: afterState.team_name,
       leader: {
         id: currentLeader.id,
         name: afterState.leader_name,

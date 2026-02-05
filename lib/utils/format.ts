@@ -85,43 +85,6 @@ export function toTitleCase(str: string | null | undefined): string {
 }
 
 /**
- * Strips the "'s Lockboxes" suffix from team names for cleaner display.
- * The main app defaults team name to "{name}'s Lockboxes" during signup.
- *
- * @param teamName - The raw team name from database
- * @returns Object with display name and full name
- */
-export function formatTeamName(teamName: string | null | undefined): {
-  displayName: string
-  fullName: string
-  hasSuffix: boolean
-} {
-  if (!teamName) {
-    return { displayName: '', fullName: '', hasSuffix: false }
-  }
-
-  const formatted = toTitleCase(teamName)
-  const suffix = "'s Lockboxes"
-  const suffixLower = suffix.toLowerCase()
-
-  // Check if name ends with "'s Lockboxes" (case-insensitive)
-  if (formatted.toLowerCase().endsWith(suffixLower)) {
-    const baseName = formatted.slice(0, -suffix.length).trim()
-    return {
-      displayName: baseName,
-      fullName: formatted,
-      hasSuffix: true,
-    }
-  }
-
-  return {
-    displayName: formatted,
-    fullName: formatted,
-    hasSuffix: false,
-  }
-}
-
-/**
  * Formats a person's name with proper capitalization.
  * Convenience wrapper around toTitleCase for semantic clarity.
  *

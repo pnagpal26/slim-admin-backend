@@ -6,8 +6,6 @@ import { useRouter } from 'next/navigation'
 interface Customer {
   id: string
   team_name: string
-  team_name_full: string
-  team_name_has_suffix: boolean
   contact_email: string
   contact_name: string
   plan_tier: string
@@ -247,14 +245,7 @@ export default function CustomersPage() {
                       onClick={() => router.push(`/customers/${c.id}`)}
                       className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
                     >
-                      <td className="px-4 py-3">
-                        <div title={c.team_name_has_suffix ? c.team_name_full : undefined}>
-                          <span className="font-medium text-gray-900">{c.team_name}</span>
-                          {c.team_name_has_suffix && (
-                            <p className="text-xs text-gray-400 mt-0.5">{c.team_name_full}</p>
-                          )}
-                        </div>
-                      </td>
+                      <td className="px-4 py-3 font-medium text-gray-900">{c.team_name}</td>
                       <td className="px-4 py-3 text-gray-600">{c.contact_email}</td>
                       <td className="px-4 py-3 text-gray-600">
                         {TIER_LABELS[c.plan_tier] || c.plan_tier}

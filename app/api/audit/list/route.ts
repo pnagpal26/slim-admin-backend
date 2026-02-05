@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { requireRole, handleApiError } from '@/lib/api-helpers'
-import { formatTeamName, formatPersonName } from '@/lib/utils/format'
+import { formatPersonName } from '@/lib/utils/format'
 
 const PAGE_SIZE = 100
 
@@ -118,17 +118,6 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Helper to format team object
-    const formatTeam = (team: Record<string, unknown> | null) => {
-      if (!team) return null
-      const formatted = formatTeamName(team.name as string)
-      return {
-        ...team,
-        name: formatted.displayName,
-        name_full: formatted.fullName,
-      }
-    }
-
     // Normalize and merge both sources
     const normalizedCustomer = ((entries || []) as Record<string, unknown>[]).map((e) => ({
       id: e.id,
@@ -136,7 +125,7 @@ export async function GET(req: NextRequest) {
       timestamp: e.performed_at,
       action: e.action,
       user: formatUser(e.users as Record<string, unknown> | null),
-      team: formatTeam((e.lockboxes as Record<string, unknown>)?.teams as Record<string, unknown> | null),
+      team: (e.lockboxes as Record<string, unknown>)?.teams || null,
       lockbox_id: (e.lockboxes as Record<string, unknown>)?.lockbox_id || null,
       details: e.details || e.after_state || null,
       action_method: e.action_method,
@@ -148,7 +137,7 @@ export async function GET(req: NextRequest) {
       timestamp: a.performed_at,
       action: a.action_type,
       user: formatUser(a.admin_users as Record<string, unknown> | null),
-      team: formatTeam(a.teams as Record<string, unknown> | null),
+      team: a.teams || null,
       lockbox_id: null,
       details: a.details || null,
       action_method: 'admin',

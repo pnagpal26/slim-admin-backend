@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { requireRole, handleApiError, computeCustomerStatus } from '@/lib/api-helpers'
-import { formatTeamName, formatPersonName } from '@/lib/utils/format'
+import { formatPersonName } from '@/lib/utils/format'
 
 export async function GET(req: NextRequest) {
   try {
@@ -121,15 +121,10 @@ export async function GET(req: NextRequest) {
     }
     const planLimit = planLimits[team.plan_tier] || 5
 
-    // Format team name - strip "'s Lockboxes" suffix for cleaner display
-    const teamNameFormatted = formatTeamName(team.name)
-
     return NextResponse.json({
       account: {
         id: team.id,
-        team_name: teamNameFormatted.displayName,
-        team_name_full: teamNameFormatted.fullName,
-        team_name_has_suffix: teamNameFormatted.hasSuffix,
+        team_name: team.name,
         plan_tier: team.plan_tier,
         billing_exempt: team.billing_exempt,
         signup_date: team.created_at,
