@@ -4,6 +4,10 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'SLIM Admin',
   description: 'SLIM Admin Backend',
+  robots: {
+    index: false,
+    follow: false,
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
