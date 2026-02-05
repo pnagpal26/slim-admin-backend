@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { Suspense, useEffect, useState, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 interface Customer {
@@ -82,7 +82,7 @@ function formatRelative(d: string | null): string {
   return formatDate(d)
 }
 
-export default function CustomersPage() {
+function CustomersContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -327,5 +327,13 @@ export default function CustomersPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function CustomersPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400">Loading...</div>}>
+      <CustomersContent />
+    </Suspense>
   )
 }
