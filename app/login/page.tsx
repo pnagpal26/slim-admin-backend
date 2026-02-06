@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import HCaptcha from '@hcaptcha/react-hcaptcha'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -9,6 +10,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showCaptcha, setShowCaptcha] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const captchaRef = useRef<HCaptcha>(null)
+
+  const isFormValid = email.trim() && password.trim() && (!showCaptcha || captchaToken)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -19,13 +25,26 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          ...(captchaToken ? { captchaToken } : {}),
+        }),
       })
 
       const data = await res.json()
 
       if (!res.ok) {
+        if (data.captcha_required) {
+          setShowCaptcha(true)
+        }
+        if (data.locked) {
+          setShowCaptcha(false)
+        }
         setError(data.error || 'Login failed')
+        // Reset captcha after failed attempt so user must re-verify
+        setCaptchaToken(null)
+        captchaRef.current?.resetCaptcha()
         return
       }
 
@@ -82,9 +101,21 @@ export default function LoginPage() {
               />
             </div>
 
+            {/* hCaptcha */}
+            {showCaptcha && (
+              <div className="flex justify-center">
+                <HCaptcha
+                  ref={captchaRef}
+                  sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || ''}
+                  onVerify={(token) => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken(null)}
+                />
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !isFormValid}
               className="w-full bg-gray-900 text-white rounded py-2 text-sm font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? 'Signing in...' : 'Sign in'}
