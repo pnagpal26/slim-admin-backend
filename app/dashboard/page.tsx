@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation'
 interface AdminUser {
   id: string
   email: string
-  name: string
+  first_name: string
+  last_name: string
   role: string
 }
 
@@ -96,7 +97,7 @@ export default function DashboardPage() {
           <h1 className="text-lg font-semibold text-gray-900">SLIM Admin</h1>
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-600">
-              {admin.name} <span className="text-gray-400">({roleLabel[admin.role]})</span>
+              {[admin.first_name, admin.last_name].filter(Boolean).join(' ')} <span className="text-gray-400">({roleLabel[admin.role]})</span>
             </span>
             <button
               onClick={handleLogout}

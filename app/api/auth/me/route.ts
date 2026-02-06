@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   const { data: admin, error } = await supabase
     .from('admin_users')
-    .select('id, email, name, role, is_active, last_login_at, created_at')
+    .select('id, email, first_name, last_name, role, is_active, last_login_at, created_at')
     .eq('id', payload.adminId)
     .single()
 

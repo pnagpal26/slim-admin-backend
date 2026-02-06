@@ -8,11 +8,11 @@ import crypto from 'crypto'
 export async function POST(req: NextRequest) {
   try {
     const admin = requireRole(req, 'invite_admin')
-    const { email, name, role } = await req.json()
+    const { email, firstName, lastName, role } = await req.json()
 
-    if (!email || !name || !role) {
+    if (!email || !firstName || !role) {
       return NextResponse.json(
-        { error: 'Email, name, and role are required' },
+        { error: 'Email, first name, and role are required' },
         { status: 400 }
       )
     }
@@ -68,14 +68,15 @@ export async function POST(req: NextRequest) {
       .from('admin_invitations')
       .insert({
         email: normalizedEmail,
-        name: name.trim(),
+        first_name: firstName.trim(),
+        last_name: (lastName || '').trim(),
         role,
         token,
         invited_by: admin.adminId,
         status: 'pending',
         expires_at: expiresAt.toISOString(),
       })
-      .select('id, email, name, role, expires_at')
+      .select('id, email, first_name, last_name, role, expires_at')
       .single()
 
     if (insertErr) {
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
     await logAdminAction(admin.adminId, 'invite_admin', {
       details: {
         invited_email: normalizedEmail,
-        invited_name: name.trim(),
+        invited_name: [firstName, lastName].filter(Boolean).join(' ').trim(),
         invited_role: role,
         invitation_id: invitation.id,
       },

@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     // Fetch the target admin
     const { data: target, error: fetchErr } = await supabase
       .from('admin_users')
-      .select('id, email, name, role, is_active')
+      .select('id, email, first_name, last_name, role, is_active')
       .eq('id', adminUserId)
       .single()
 
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       details: {
         deactivated_id: target.id,
         deactivated_email: target.email,
-        deactivated_name: target.name,
+        deactivated_name: [target.first_name, target.last_name].filter(Boolean).join(' '),
         deactivated_role: target.role,
       },
     })

@@ -10,7 +10,8 @@ function SetupForm() {
 
   const [invitation, setInvitation] = useState<{
     email: string
-    name: string
+    first_name: string
+    last_name: string
     role: string
   } | null>(null)
   const [password, setPassword] = useState('')
@@ -110,7 +111,7 @@ function SetupForm() {
           </div>
 
           <div className="mb-4 bg-gray-50 rounded px-3 py-2 text-sm">
-            <p><span className="text-gray-500">Name:</span> {invitation.name}</p>
+            <p><span className="text-gray-500">Name:</span> {[invitation.first_name, invitation.last_name].filter(Boolean).join(' ')}</p>
             <p><span className="text-gray-500">Email:</span> {invitation.email}</p>
             <p><span className="text-gray-500">Role:</span> {roleLabel[invitation.role] || invitation.role}</p>
           </div>

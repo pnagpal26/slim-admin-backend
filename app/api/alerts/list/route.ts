@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
       .from('teams')
       .select(`
         id, name, plan_tier, billing_exempt, created_at, trial_ends_at,
-        users(id, email, name, role, last_active_at, is_active),
+        users(id, email, first_name, last_name, role, last_active_at, is_active),
         stripe_customers(subscription_status, cancel_at_period_end, current_period_end),
         lockboxes:lockboxes(id, status)
       `)
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
       billing_exempt: boolean
       created_at: string
       trial_ends_at: string | null
-      users: { id: string; email: string; name: string; role: string; last_active_at: string | null; is_active: boolean }[]
+      users: { id: string; email: string; first_name: string; last_name: string; role: string; last_active_at: string | null; is_active: boolean }[]
       stripe_customers: { subscription_status: string; cancel_at_period_end: boolean; current_period_end: string | null }[]
       lockboxes: { id: string; status: string }[]
     }[]

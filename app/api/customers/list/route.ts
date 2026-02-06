@@ -19,7 +19,8 @@ interface TeamRow {
   users: {
     id: string
     email: string
-    name: string
+    first_name: string
+    last_name: string
     role: string
     last_active_at: string | null
     is_active: boolean
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
       .from('teams')
       .select(`
         id, name, plan_tier, billing_exempt, created_at, trial_ends_at,
-        users(id, email, name, role, last_active_at, is_active),
+        users(id, email, first_name, last_name, role, last_active_at, is_active),
         stripe_customers(subscription_status, cancel_at_period_end, current_period_end)
       `) as { data: TeamRow[] | null; error: unknown }
 
@@ -74,7 +75,7 @@ export async function GET(req: NextRequest) {
         id: team.id,
         team_name: team.name,
         contact_email: leader?.email || 'N/A',
-        contact_name: formatPersonName(leader?.name) || 'N/A',
+        contact_name: [formatPersonName(leader?.first_name), formatPersonName(leader?.last_name)].filter(Boolean).join(' ') || 'N/A',
         plan_tier: team.plan_tier,
         billing_exempt: team.billing_exempt,
         signup_date: team.created_at,

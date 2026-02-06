@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   const { data: invitation, error } = await supabase
     .from('admin_invitations')
-    .select('id, email, name, role, status, expires_at')
+    .select('id, email, first_name, last_name, role, status, expires_at')
     .eq('token', token)
     .single()
 
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    invitation: { email: invitation.email, name: invitation.name, role: invitation.role },
+    invitation: { email: invitation.email, firstName: invitation.first_name, lastName: invitation.last_name, role: invitation.role },
   })
 }
 
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     const { data: invitation, error: invError } = await supabase
       .from('admin_invitations')
-      .select('id, email, name, role, status, expires_at, invited_by')
+      .select('id, email, first_name, last_name, role, status, expires_at, invited_by')
       .eq('token', token)
       .single()
 
@@ -92,13 +92,14 @@ export async function POST(req: NextRequest) {
       .from('admin_users')
       .insert({
         email: invitation.email.toLowerCase(),
-        name: invitation.name,
+        first_name: invitation.first_name,
+        last_name: invitation.last_name || '',
         password_hash,
         role: invitation.role,
         is_active: true,
         last_login_at: new Date().toISOString(),
       })
-      .select('id, email, name, role')
+      .select('id, email, first_name, last_name, role')
       .single()
 
     if (createError) {
@@ -121,7 +122,7 @@ export async function POST(req: NextRequest) {
     const jwtToken = createAdminToken(admin.id, admin.role, admin.email)
 
     const response = NextResponse.json({
-      admin: { id: admin.id, email: admin.email, name: admin.name, role: admin.role },
+      admin: { id: admin.id, email: admin.email, first_name: admin.first_name, last_name: admin.last_name, role: admin.role },
     })
 
     response.cookies.set(ADMIN_COOKIE_NAME, jwtToken, {

@@ -36,14 +36,14 @@ export async function GET(req: NextRequest) {
     // Fetch team members
     const { data: members } = await supabase
       .from('users')
-      .select('id, email, name, phone, role, is_active, is_verified, last_active_at, created_at')
+      .select('id, email, first_name, last_name, phone, role, is_active, is_verified, last_active_at, created_at')
       .eq('team_id', teamId)
       .order('created_at', { ascending: true })
 
     // Fetch pending invitations
     const { data: invitations } = await supabase
       .from('invitations')
-      .select('id, email, name, role, status, created_at, expires_at')
+      .select('id, email, first_name, last_name, role, status, created_at, expires_at')
       .eq('team_id', teamId)
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
       .select(`
         id, action, performed_at, action_method, details,
         before_state, after_state, lockbox_id,
-        users:performed_by(id, name, email)
+        users:performed_by(id, first_name, last_name, email)
       `)
       .eq('lockbox_id.team_id' as never, teamId)
       .order('performed_at', { ascending: false })
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
           .select(`
             id, action, performed_at, action_method, details,
             before_state, after_state, lockbox_id,
-            users:performed_by(id, name, email)
+            users:performed_by(id, first_name, last_name, email)
           `)
           .in('lockbox_id', lockboxIds)
           .order('performed_at', { ascending: false })
@@ -134,7 +134,7 @@ export async function GET(req: NextRequest) {
         last_login: lastLogin,
         status,
         leader: leader
-          ? { id: leader.id, name: formatPersonName(leader.name), email: leader.email, phone: leader.phone }
+          ? { id: leader.id, name: [formatPersonName(leader.first_name), formatPersonName(leader.last_name)].filter(Boolean).join(' '), email: leader.email, phone: leader.phone }
           : null,
         stripe: stripeData
           ? {
@@ -151,11 +151,11 @@ export async function GET(req: NextRequest) {
       },
       members: (members || []).map((m) => ({
         ...m,
-        name: formatPersonName(m.name),
+        name: [formatPersonName(m.first_name), formatPersonName(m.last_name)].filter(Boolean).join(' '),
       })),
       invitations: (invitations || []).map((inv) => ({
         ...inv,
-        name: formatPersonName(inv.name),
+        name: [formatPersonName(inv.first_name), formatPersonName(inv.last_name)].filter(Boolean).join(' '),
       })),
       recent_activity: (activity || []).map((a: Record<string, unknown>) => ({
         id: a.id,
@@ -167,7 +167,7 @@ export async function GET(req: NextRequest) {
         user: a.users
           ? {
               ...(a.users as Record<string, unknown>),
-              name: formatPersonName((a.users as Record<string, unknown>).name as string),
+              name: [formatPersonName((a.users as Record<string, unknown>).first_name as string), formatPersonName((a.users as Record<string, unknown>).last_name as string)].filter(Boolean).join(' '),
             }
           : null,
       })),

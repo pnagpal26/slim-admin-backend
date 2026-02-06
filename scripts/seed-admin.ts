@@ -5,8 +5,8 @@
  *   cd admin-backend
  *   npx tsx scripts/seed-admin.ts
  *
- * You will be prompted for email and password, or set them via env vars:
- *   SEED_ADMIN_EMAIL=you@example.com SEED_ADMIN_PASSWORD=yourpassword npx tsx scripts/seed-admin.ts
+ * You will be prompted for email, name, and password, or set them via env vars:
+ *   SEED_ADMIN_EMAIL=you@example.com SEED_ADMIN_FIRST_NAME=Jane SEED_ADMIN_LAST_NAME=Smith SEED_ADMIN_PASSWORD=yourpassword npx tsx scripts/seed-admin.ts
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -36,11 +36,12 @@ function prompt(question: string, hidden = false): Promise<string> {
 
 async function main() {
   const email = process.env.SEED_ADMIN_EMAIL || (await prompt('Admin email: '))
-  const name = process.env.SEED_ADMIN_NAME || (await prompt('Admin name: '))
+  const firstName = process.env.SEED_ADMIN_FIRST_NAME || (await prompt('Admin first name: '))
+  const lastName = process.env.SEED_ADMIN_LAST_NAME || (await prompt('Admin last name: '))
   const password = process.env.SEED_ADMIN_PASSWORD || (await prompt('Admin password: '))
 
-  if (!email || !name || !password) {
-    console.error('Email, name, and password are all required.')
+  if (!email || !firstName || !password) {
+    console.error('Email, first name, and password are all required.')
     process.exit(1)
   }
 
@@ -68,12 +69,13 @@ async function main() {
     .from('admin_users')
     .insert({
       email: email.toLowerCase(),
-      name,
+      first_name: firstName,
+      last_name: lastName || '',
       password_hash,
       role: 'super_admin',
       is_active: true,
     })
-    .select('id, email, name, role')
+    .select('id, email, first_name, last_name, role')
     .single()
 
   if (error) {
@@ -84,7 +86,7 @@ async function main() {
   console.log('\nSuper Admin created successfully:')
   console.log(`  ID:    ${data.id}`)
   console.log(`  Email: ${data.email}`)
-  console.log(`  Name:  ${data.name}`)
+  console.log(`  Name:  ${[data.first_name, data.last_name].filter(Boolean).join(' ')}`)
   console.log(`  Role:  ${data.role}`)
 }
 

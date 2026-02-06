@@ -8,7 +8,7 @@ interface AuditEntry {
   source: 'customer' | 'admin'
   timestamp: string
   action: string
-  user: { id: string; name: string; email: string } | null
+  user: { id: string; first_name: string; last_name: string; email: string } | null
   team: { id: string; name: string } | null
   lockbox_id: string | null
   details: Record<string, unknown> | null
@@ -277,7 +277,7 @@ export default function AuditPage() {
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-gray-600 truncate">
-                        {e.user?.name || '—'}
+                        {e.user ? [e.user.first_name, e.user.last_name].filter(Boolean).join(' ') : '—'}
                         {e.source === 'admin' && (
                           <span className="ml-1 text-xs bg-purple-100 text-purple-700 px-1 py-0.5 rounded">admin</span>
                         )}

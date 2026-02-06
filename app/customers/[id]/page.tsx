@@ -12,7 +12,7 @@ interface AccountInfo {
   trial_ends_at: string | null
   last_login: string | null
   status: string
-  leader: { id: string; name: string; email: string; phone: string | null } | null
+  leader: { id: string; first_name: string; last_name: string; email: string; phone: string | null } | null
   stripe: {
     subscription_status: string
     cancel_at_period_end: boolean
@@ -35,7 +35,8 @@ interface Usage {
 interface Member {
   id: string
   email: string
-  name: string
+  first_name: string
+  last_name: string
   phone: string | null
   role: string
   is_active: boolean
@@ -47,7 +48,8 @@ interface Member {
 interface Invitation {
   id: string
   email: string
-  name: string
+  first_name: string
+  last_name: string
   role: string
   status: string
   created_at: string
@@ -61,7 +63,7 @@ interface ActivityEntry {
   action_method: string | null
   details: Record<string, unknown> | null
   lockbox_id: string | null
-  user: { id: string; name: string; email: string } | null
+  user: { id: string; first_name: string; last_name: string; email: string } | null
 }
 
 const TIER_LABELS: Record<string, string> = {
@@ -150,7 +152,8 @@ export default function CustomerDetailPage() {
   // Edit modal state
   const [showEdit, setShowEdit] = useState(false)
   const [editTeamName, setEditTeamName] = useState('')
-  const [editLeaderName, setEditLeaderName] = useState('')
+  const [editLeaderFirstName, setEditLeaderFirstName] = useState('')
+  const [editLeaderLastName, setEditLeaderLastName] = useState('')
   const [editLeaderEmail, setEditLeaderEmail] = useState('')
   const [editLeaderPhone, setEditLeaderPhone] = useState('')
   const [editReason, setEditReason] = useState('')
@@ -258,7 +261,8 @@ export default function CustomerDetailPage() {
   function openEditModal() {
     if (account) {
       setEditTeamName(account.team_name)
-      setEditLeaderName(account.leader?.name || '')
+      setEditLeaderFirstName(account.leader?.first_name || '')
+      setEditLeaderLastName(account.leader?.last_name || '')
       setEditLeaderEmail(account.leader?.email || '')
       setEditLeaderPhone(account.leader?.phone || '')
     }
@@ -271,7 +275,8 @@ export default function CustomerDetailPage() {
   function closeEditModal() {
     setShowEdit(false)
     setEditTeamName('')
-    setEditLeaderName('')
+    setEditLeaderFirstName('')
+    setEditLeaderLastName('')
     setEditLeaderEmail('')
     setEditLeaderPhone('')
     setEditReason('')
@@ -290,7 +295,8 @@ export default function CustomerDetailPage() {
         body: JSON.stringify({
           teamId,
           teamName: editTeamName,
-          leaderName: editLeaderName,
+          leaderFirstName: editLeaderFirstName,
+          leaderLastName: editLeaderLastName,
           leaderEmail: editLeaderEmail,
           leaderPhone: editLeaderPhone || null,
           reason: editReason,
@@ -466,7 +472,7 @@ export default function CustomerDetailPage() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                 <div>
                   <p className="text-gray-500">Name</p>
-                  <p className="font-medium">{account.leader.name}</p>
+                  <p className="font-medium">{[account.leader.first_name, account.leader.last_name].filter(Boolean).join(' ')}</p>
                 </div>
                 <div>
                   <p className="text-gray-500">Email</p>
@@ -542,7 +548,7 @@ export default function CustomerDetailPage() {
             <tbody>
               {members.map((m) => (
                 <tr key={m.id} className="border-b border-gray-50">
-                  <td className="px-5 py-2.5 font-medium">{m.name}</td>
+                  <td className="px-5 py-2.5 font-medium">{[m.first_name, m.last_name].filter(Boolean).join(' ')}</td>
                   <td className="px-5 py-2.5 text-gray-600">{m.email}</td>
                   <td className="px-5 py-2.5 text-gray-600">{ROLE_LABELS[m.role] || m.role}</td>
                   <td className="px-5 py-2.5 text-gray-600">{formatDateTime(m.last_active_at)}</td>
@@ -557,7 +563,7 @@ export default function CustomerDetailPage() {
               ))}
               {invitations.map((inv) => (
                 <tr key={inv.id} className="border-b border-gray-50 bg-yellow-50/50">
-                  <td className="px-5 py-2.5 font-medium text-gray-500">{inv.name}</td>
+                  <td className="px-5 py-2.5 font-medium text-gray-500">{[inv.first_name, inv.last_name].filter(Boolean).join(' ')}</td>
                   <td className="px-5 py-2.5 text-gray-500">{inv.email}</td>
                   <td className="px-5 py-2.5 text-gray-500">{ROLE_LABELS[inv.role] || inv.role}</td>
                   <td className="px-5 py-2.5 text-gray-400">—</td>
@@ -601,7 +607,7 @@ export default function CustomerDetailPage() {
                       {formatDateTime(a.performed_at)}
                     </td>
                     <td className="px-5 py-2.5 text-gray-600">
-                      {a.user?.name || '—'}
+                      {a.user ? [a.user.first_name, a.user.last_name].filter(Boolean).join(' ') : '—'}
                     </td>
                     <td className="px-5 py-2.5">
                       <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-medium">
@@ -775,14 +781,25 @@ export default function CustomerDetailPage() {
                       className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Leader Name</label>
-                    <input
-                      type="text"
-                      value={editLeaderName}
-                      onChange={(e) => setEditLeaderName(e.target.value)}
-                      className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Leader First Name</label>
+                      <input
+                        type="text"
+                        value={editLeaderFirstName}
+                        onChange={(e) => setEditLeaderFirstName(e.target.value)}
+                        className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Leader Last Name</label>
+                      <input
+                        type="text"
+                        value={editLeaderLastName}
+                        onChange={(e) => setEditLeaderLastName(e.target.value)}
+                        className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Leader Email</label>
@@ -819,7 +836,7 @@ export default function CustomerDetailPage() {
                   </button>
                   <button
                     onClick={handleEdit}
-                    disabled={editLoading || !editTeamName.trim() || !editLeaderName.trim() || !editLeaderEmail.trim() || !editReason.trim()}
+                    disabled={editLoading || !editTeamName.trim() || !editLeaderFirstName.trim() || !editLeaderEmail.trim() || !editReason.trim()}
                     className="px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {editLoading ? 'Saving...' : 'Save Changes'}

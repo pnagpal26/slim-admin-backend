@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation'
 interface AdminUser {
   id: string
   email: string
-  name: string
+  first_name: string
+  last_name: string
   role: string
   is_active: boolean
   last_login_at: string | null
@@ -16,7 +17,8 @@ interface AdminUser {
 interface PendingInvitation {
   id: string
   email: string
-  name: string
+  first_name: string
+  last_name: string
   role: string
   expires_at: string
   created_at: string
@@ -25,7 +27,8 @@ interface PendingInvitation {
 interface CurrentAdmin {
   id: string
   email: string
-  name: string
+  first_name: string
+  last_name: string
   role: string
 }
 
@@ -65,7 +68,8 @@ export default function AdminUsersPage() {
   // Invite modal
   const [showInvite, setShowInvite] = useState(false)
   const [invEmail, setInvEmail] = useState('')
-  const [invName, setInvName] = useState('')
+  const [invFirstName, setInvFirstName] = useState('')
+  const [invLastName, setInvLastName] = useState('')
   const [invRole, setInvRole] = useState('support_l1')
   const [invLoading, setInvLoading] = useState(false)
   const [invError, setInvError] = useState('')
@@ -117,7 +121,8 @@ export default function AdminUsersPage() {
   function closeInviteModal() {
     setShowInvite(false)
     setInvEmail('')
-    setInvName('')
+    setInvFirstName('')
+    setInvLastName('')
     setInvRole('support_l1')
     setInvError('')
     setInvSuccess('')
@@ -133,7 +138,7 @@ export default function AdminUsersPage() {
       const res = await fetch('/api/admin-users/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: invEmail, name: invName, role: invRole }),
+        body: JSON.stringify({ email: invEmail, firstName: invFirstName, lastName: invLastName, role: invRole }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -255,7 +260,7 @@ export default function AdminUsersPage() {
               {admins.map((a) => (
                 <tr key={a.id} className="border-b border-gray-50">
                   <td className="px-5 py-3 font-medium text-gray-900">
-                    {a.name}
+                    {[a.first_name, a.last_name].filter(Boolean).join(' ')}
                     {a.id === currentAdmin?.id && (
                       <span className="ml-1.5 text-xs text-gray-400">(you)</span>
                     )}
@@ -315,7 +320,7 @@ export default function AdminUsersPage() {
                 <tbody>
                   {invitations.map((inv) => (
                     <tr key={inv.id} className="border-b border-gray-50">
-                      <td className="px-5 py-2.5 text-gray-700">{inv.name}</td>
+                      <td className="px-5 py-2.5 text-gray-700">{[inv.first_name, inv.last_name].filter(Boolean).join(' ')}</td>
                       <td className="px-5 py-2.5 text-gray-600">{inv.email}</td>
                       <td className="px-5 py-2.5">
                         <span className="text-xs font-medium bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">
@@ -379,16 +384,28 @@ export default function AdminUsersPage() {
                       placeholder="support@example.com"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={invName}
-                      onChange={(e) => setInvName(e.target.value)}
-                      className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Jane Smith"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={invFirstName}
+                        onChange={(e) => setInvFirstName(e.target.value)}
+                        className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Jane"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                      <input
+                        type="text"
+                        value={invLastName}
+                        onChange={(e) => setInvLastName(e.target.value)}
+                        className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Smith"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
@@ -411,7 +428,7 @@ export default function AdminUsersPage() {
                   </button>
                   <button
                     onClick={handleInvite}
-                    disabled={invLoading || !invEmail.trim() || !invName.trim()}
+                    disabled={invLoading || !invEmail.trim() || !invFirstName.trim()}
                     className="px-4 py-2 text-sm rounded bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {invLoading ? 'Sending...' : 'Send Invitation'}
@@ -429,7 +446,7 @@ export default function AdminUsersPage() {
           <div className="bg-white rounded-lg shadow-lg w-full max-w-sm p-6 mx-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Deactivate Admin User</h3>
             <p className="text-sm text-gray-600 mb-4">
-              Are you sure you want to deactivate <strong>{deactivateTarget.name}</strong> ({deactivateTarget.email})?
+              Are you sure you want to deactivate <strong>{[deactivateTarget.first_name, deactivateTarget.last_name].filter(Boolean).join(' ')}</strong> ({deactivateTarget.email})?
               They will lose access immediately.
             </p>
 

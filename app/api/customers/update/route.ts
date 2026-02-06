@@ -8,12 +8,12 @@ import { toTitleCase } from '@/lib/utils/format'
 export async function POST(req: NextRequest) {
   try {
     const admin = requireRole(req, 'edit_customer')
-    const { teamId, teamName, leaderName, leaderEmail, leaderPhone, reason } = await req.json()
+    const { teamId, teamName, leaderFirstName, leaderLastName, leaderEmail, leaderPhone, reason } = await req.json()
 
     // Validate required fields
-    if (!teamId || !teamName || !leaderName || !leaderEmail || !reason) {
+    if (!teamId || !teamName || !leaderFirstName || !leaderEmail || !reason) {
       return NextResponse.json(
-        { error: 'teamId, teamName, leaderName, leaderEmail, and reason are required' },
+        { error: 'teamId, teamName, leaderFirstName, leaderEmail, and reason are required' },
         { status: 400 }
       )
     }
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     // Fetch current leader
     const { data: currentLeader, error: leaderError } = await supabase
       .from('users')
-      .select('id, name, email, phone, role')
+      .select('id, first_name, last_name, email, phone, role')
       .eq('team_id', teamId)
       .in('role', ['team_leader', 'solo_agent'])
       .single()
@@ -58,14 +58,16 @@ export async function POST(req: NextRequest) {
     // Store before state for logging
     const beforeState = {
       team_name: team.name,
-      leader_name: currentLeader.name,
+      leader_first_name: currentLeader.first_name,
+      leader_last_name: currentLeader.last_name,
       leader_email: currentLeader.email,
       leader_phone: currentLeader.phone,
     }
 
     const afterState = {
       team_name: toTitleCase(teamName),
-      leader_name: toTitleCase(leaderName),
+      leader_first_name: toTitleCase(leaderFirstName),
+      leader_last_name: toTitleCase(leaderLastName),
       leader_email: leaderEmail.trim().toLowerCase(),
       leader_phone: leaderPhone?.trim() || null,
     }
@@ -87,7 +89,8 @@ export async function POST(req: NextRequest) {
     const { error: updateLeaderError } = await supabase
       .from('users')
       .update({
-        name: afterState.leader_name,
+        first_name: afterState.leader_first_name,
+        last_name: afterState.leader_last_name || '',
         email: afterState.leader_email,
         phone: afterState.leader_phone,
         updated_at: new Date().toISOString(),
@@ -114,7 +117,8 @@ export async function POST(req: NextRequest) {
       team_name: afterState.team_name,
       leader: {
         id: currentLeader.id,
-        name: afterState.leader_name,
+        first_name: afterState.leader_first_name,
+        last_name: afterState.leader_last_name,
         email: afterState.leader_email,
         phone: afterState.leader_phone,
       },

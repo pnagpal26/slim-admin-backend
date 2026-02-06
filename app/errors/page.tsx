@@ -20,7 +20,7 @@ interface ErrorEntry {
   team_id: string | null
   user_id: string | null
   teams: { id: string; name: string } | null
-  users: { id: string; name: string; email: string } | null
+  users: { id: string; first_name: string; last_name: string; email: string } | null
 }
 
 function formatDateTime(d: string | null): string {
@@ -267,7 +267,7 @@ export default function ErrorsPage() {
                             </div>
                             <div>
                               <p className="text-xs text-gray-500">User</p>
-                              <p className="font-medium">{e.users ? `${e.users.name} (${e.users.email})` : '—'}</p>
+                              <p className="font-medium">{e.users ? `${[e.users.first_name, e.users.last_name].filter(Boolean).join(' ')} (${e.users.email})` : '—'}</p>
                             </div>
                             <div>
                               <p className="text-xs text-gray-500">IP Address</p>

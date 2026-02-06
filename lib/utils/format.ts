@@ -94,3 +94,11 @@ export function toTitleCase(str: string | null | undefined): string {
 export function formatPersonName(name: string | null | undefined): string {
   return toTitleCase(name)
 }
+
+/**
+ * Combines first and last name into a full display name.
+ * Filters out null/empty values and joins with a space.
+ */
+export function fullName(firstName: string | null | undefined, lastName: string | null | undefined): string {
+  return [firstName, lastName].filter(Boolean).join(' ')
+}

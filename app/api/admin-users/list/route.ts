@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
 
     const { data: admins, error } = await supabase
       .from('admin_users')
-      .select('id, email, name, role, is_active, last_login_at, created_at')
+      .select('id, email, first_name, last_name, role, is_active, last_login_at, created_at')
       .order('created_at', { ascending: true })
 
     if (error) {
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     // Fetch pending invitations
     const { data: invitations } = await supabase
       .from('admin_invitations')
-      .select('id, email, name, role, status, expires_at, created_at, invited_by')
+      .select('id, email, first_name, last_name, role, status, expires_at, created_at, invited_by')
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
 

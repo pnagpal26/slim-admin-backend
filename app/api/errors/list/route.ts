@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
         status, resolved_by, resolved_at, created_at,
         team_id, user_id,
         teams:team_id(id, name),
-        users:user_id(id, name, email)
+        users:user_id(id, first_name, last_name, email)
       `, { count: 'exact' })
 
     if (status) {

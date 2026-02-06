@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
     const { data: admin, error } = await supabase
       .from('admin_users')
-      .select('id, email, password_hash, name, role, is_active')
+      .select('id, email, password_hash, first_name, last_name, role, is_active')
       .eq('email', email.toLowerCase().trim())
       .single()
 
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     const token = createAdminToken(admin.id, admin.role, admin.email)
 
     const response = NextResponse.json({
-      admin: { id: admin.id, email: admin.email, name: admin.name, role: admin.role },
+      admin: { id: admin.id, email: admin.email, first_name: admin.first_name, last_name: admin.last_name, role: admin.role },
     })
 
     response.cookies.set(ADMIN_COOKIE_NAME, token, {

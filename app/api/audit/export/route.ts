@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       .from('audit_log')
       .select(`
         id, lockbox_id, action, performed_at, action_method, details,
-        users:performed_by(id, name, email),
+        users:performed_by(id, first_name, last_name, email),
         lockboxes:lockbox_id(lockbox_id, team_id, teams:team_id(name))
       `)
 
@@ -61,13 +61,13 @@ export async function GET(req: NextRequest) {
 
     // Build CSV
     const rows = ((entries || []) as Record<string, unknown>[]).map((e) => {
-      const user = e.users as { name: string; email: string } | null
+      const user = e.users as { first_name: string; last_name: string; email: string } | null
       const lockbox = e.lockboxes as { lockbox_id: string; teams: { name: string } | null } | null
       const teamName = lockbox?.teams?.name || ''
       return [
         e.performed_at,
         csvEscape(teamName),
-        csvEscape(user?.name || ''),
+        csvEscape(user ? [user.first_name, user.last_name].filter(Boolean).join(' ') : ''),
         csvEscape(user?.email || ''),
         csvEscape(e.action as string),
         csvEscape(lockbox?.lockbox_id || ''),

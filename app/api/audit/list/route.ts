@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       .select(`
         id, lockbox_id, action, performed_at, action_method,
         before_state, after_state, details,
-        users:performed_by(id, name, email),
+        users:performed_by(id, first_name, last_name, email),
         lockboxes:lockbox_id(id, lockbox_id, team_id, teams:team_id(id, name))
       `, { count: 'exact' })
 
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
         .from('admin_actions')
         .select(`
           id, action_type, performed_at, details, reason,
-          admin_users:admin_user_id(id, name, email),
+          admin_users:admin_user_id(id, first_name, last_name, email),
           teams:target_team_id(id, name)
         `, { count: 'exact' })
 
@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
       if (!user) return null
       return {
         ...user,
-        name: formatPersonName(user.name as string),
+        name: [formatPersonName(user.first_name as string), formatPersonName(user.last_name as string)].filter(Boolean).join(' '),
       }
     }
 
