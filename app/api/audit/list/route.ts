@@ -118,6 +118,31 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Strip sensitive/noisy fields from lockbox state blobs
+    const STRIP_KEYS = new Set([
+      'code_encrypted', 'encrypted_dek', 'id', 'team_id', 'owner_id',
+      'created_by', 'updated_by', 'assigned_by', 'installed_by',
+      'created_at', 'updated_at', 'assigned_at', 'installed_at', 'removed_at', 'deleted_at',
+      'latitude', 'longitude', 'address_components',
+    ])
+
+    function cleanDetails(details: Record<string, unknown> | null, afterState: Record<string, unknown> | null, action: string): Record<string, unknown> | null {
+      // If we have explicit details (non-state), use those
+      if (details && Object.keys(details).length > 0) return details
+
+      // Fall back to after_state but extract only useful fields
+      if (!afterState) return null
+
+      const clean: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(afterState)) {
+        if (STRIP_KEYS.has(k)) continue
+        if (v === null || v === undefined) continue
+        if (Array.isArray(v) && v.length === 0) continue
+        clean[k] = v
+      }
+      return Object.keys(clean).length > 0 ? clean : null
+    }
+
     // Normalize and merge both sources
     const normalizedCustomer = ((entries || []) as Record<string, unknown>[]).map((e) => ({
       id: e.id,
@@ -127,7 +152,11 @@ export async function GET(req: NextRequest) {
       user: formatUser(e.users as Record<string, unknown> | null),
       team: (e.lockboxes as Record<string, unknown>)?.teams || null,
       lockbox_id: (e.lockboxes as Record<string, unknown>)?.lockbox_id || null,
-      details: e.details || e.after_state || null,
+      details: cleanDetails(
+        e.details as Record<string, unknown> | null,
+        e.after_state as Record<string, unknown> | null,
+        e.action as string
+      ),
       action_method: e.action_method,
     }))
 

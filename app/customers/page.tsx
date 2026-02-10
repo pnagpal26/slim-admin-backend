@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { TIER_LABELS, PLAN_TIERS, STATUS_COLORS, STATUS_LABELS } from '@/lib/constants'
 
 interface Customer {
   id: string
@@ -16,15 +17,6 @@ interface Customer {
   member_count: number
 }
 
-const PLAN_TIERS = [
-  { value: '', label: 'All Plans' },
-  { value: 'free_trial', label: 'Free Trial' },
-  { value: 'solo', label: 'Solo Agent' },
-  { value: 'small', label: 'Small Team' },
-  { value: 'medium', label: 'Medium Team' },
-  { value: 'enterprise', label: 'Enterprise' },
-]
-
 const STATUSES = [
   { value: '', label: 'All Statuses' },
   { value: 'active_trial', label: 'Active Trial' },
@@ -33,30 +25,6 @@ const STATUSES = [
   { value: 'pending_cancellation', label: 'Pending Cancellation' },
   { value: 'cancelled', label: 'Cancelled' },
 ]
-
-const STATUS_COLORS: Record<string, string> = {
-  active_trial: 'bg-blue-100 text-blue-800',
-  active_paid: 'bg-green-100 text-green-800',
-  past_due: 'bg-red-100 text-red-800',
-  pending_cancellation: 'bg-yellow-100 text-yellow-800',
-  cancelled: 'bg-gray-100 text-gray-600',
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  active_trial: 'Active Trial',
-  active_paid: 'Active Paid',
-  past_due: 'Past Due',
-  pending_cancellation: 'Pending Cancel',
-  cancelled: 'Cancelled',
-}
-
-const TIER_LABELS: Record<string, string> = {
-  free_trial: 'Free Trial',
-  solo: 'Solo',
-  small: 'Small Team',
-  medium: 'Medium Team',
-  enterprise: 'Enterprise',
-}
 
 function formatDate(d: string | null): string {
   if (!d) return '—'
@@ -82,9 +50,12 @@ function formatRelative(d: string | null): string {
   return formatDate(d)
 }
 
+const ROLE_LABELS: Record<string, string> = { super_admin: 'Super Admin', support_l1: 'Support L1', support_l2: 'Support L2' }
+
 function CustomersContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [admin, setAdmin] = useState<{ first_name: string; last_name: string; role: string } | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -96,6 +67,15 @@ function CustomersContent() {
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
   const [successMessage, setSuccessMessage] = useState('')
+
+  useEffect(() => {
+    fetch('/api/auth/me', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setAdmin(d.admin) }).catch(() => {})
+  }, [])
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/login')
+  }
 
   // Show success message if redirected after deletion
   useEffect(() => {
@@ -177,17 +157,35 @@ function CustomersContent() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
+      <header className="bg-[#0D7377]">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <a href="/dashboard" className="text-lg font-semibold text-gray-900 hover:text-gray-700">
+            <a href="/dashboard" className="text-lg font-semibold text-white hover:text-white/90">
               SLIM Admin
             </a>
-            <span className="text-gray-300">/</span>
-            <h1 className="text-lg font-medium text-gray-700">Customers</h1>
+            <span className="text-white/40">/</span>
+            <h1 className="text-lg font-medium text-white/90">Customers</h1>
           </div>
+          {admin && (
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-white/80">
+                {[admin.first_name, admin.last_name].filter(Boolean).join(' ')} <span className="text-white/60">({ROLE_LABELS[admin.role] || admin.role})</span>
+              </span>
+              <button onClick={handleLogout} className="text-sm text-white/70 hover:text-white transition-colors">Sign out</button>
+            </div>
+          )}
         </div>
       </header>
+
+      <nav className="bg-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 flex gap-6 text-sm">
+          <a href="/dashboard" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Dashboard</a>
+          <a href="/customers" className="py-2.5 border-b-2 border-[#0D7377] text-[#0D7377] font-medium">Customers</a>
+          <a href="/alerts" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Alerts</a>
+          <a href="/errors" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Errors</a>
+          <a href="/audit" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Audit Log</a>
+        </div>
+      </nav>
 
       <main className="max-w-7xl mx-auto px-4 py-6">
         {/* Success message */}
@@ -207,12 +205,12 @@ function CustomersContent() {
             placeholder="Search by team name or email..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="w-72 rounded border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-72 rounded border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D7377] focus:border-transparent"
           />
           <select
             value={planTier}
             onChange={(e) => { setPlanTier(e.target.value); setPage(1) }}
-            className="rounded border border-gray-300 px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="rounded border border-gray-300 px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#0D7377]"
           >
             {PLAN_TIERS.map((t) => (
               <option key={t.value} value={t.value}>{t.label}</option>
@@ -221,7 +219,7 @@ function CustomersContent() {
           <select
             value={status}
             onChange={(e) => { setStatus(e.target.value); setPage(1) }}
-            className="rounded border border-gray-300 px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="rounded border border-gray-300 px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#0D7377]"
           >
             {STATUSES.map((s) => (
               <option key={s.value} value={s.value}>{s.label}</option>

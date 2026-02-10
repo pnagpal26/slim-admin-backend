@@ -42,8 +42,11 @@ function formatRelative(d: string): string {
   return `${days}d ago`
 }
 
+const ROLE_LABELS: Record<string, string> = { super_admin: 'Super Admin', support_l1: 'Support L1', support_l2: 'Support L2' }
+
 export default function ErrorsPage() {
   const router = useRouter()
+  const [admin, setAdmin] = useState<{ first_name: string; last_name: string; role: string } | null>(null)
   const [errors, setErrors] = useState<ErrorEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
@@ -51,6 +54,15 @@ export default function ErrorsPage() {
   const [totalPages, setTotalPages] = useState(0)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [resolving, setResolving] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/auth/me', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setAdmin(d.admin) }).catch(() => {})
+  }, [])
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/login')
+  }
 
   // Filters
   const [status, setStatus] = useState('active')
@@ -112,11 +124,21 @@ export default function ErrorsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-4">
-          <a href="/dashboard" className="text-lg font-semibold text-gray-900 hover:text-gray-700">SLIM Admin</a>
-          <span className="text-gray-300">/</span>
-          <h1 className="text-lg font-medium text-gray-700">Error Log</h1>
+      <header className="bg-[#0D7377]">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <a href="/dashboard" className="text-lg font-semibold text-white hover:text-white/90">SLIM Admin</a>
+            <span className="text-white/40">/</span>
+            <h1 className="text-lg font-medium text-white/90">Error Log</h1>
+          </div>
+          {admin && (
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-white/80">
+                {[admin.first_name, admin.last_name].filter(Boolean).join(' ')} <span className="text-white/60">({ROLE_LABELS[admin.role] || admin.role})</span>
+              </span>
+              <button onClick={handleLogout} className="text-sm text-white/70 hover:text-white transition-colors">Sign out</button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -125,7 +147,7 @@ export default function ErrorsPage() {
           <a href="/dashboard" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Dashboard</a>
           <a href="/customers" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Customers</a>
           <a href="/alerts" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Alerts</a>
-          <a href="/errors" className="py-2.5 border-b-2 border-gray-900 text-gray-900 font-medium">Errors</a>
+          <a href="/errors" className="py-2.5 border-b-2 border-[#0D7377] text-[#0D7377] font-medium">Errors</a>
           <a href="/audit" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Audit Log</a>
         </div>
       </nav>
@@ -305,7 +327,7 @@ export default function ErrorsPage() {
                               <button
                                 onClick={() => handleResolve(e.id)}
                                 disabled={resolving === e.id}
-                                className="px-3 py-1.5 text-sm rounded bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50"
+                                className="px-3 py-1.5 text-sm rounded bg-[#0D7377] text-white hover:bg-[#0B6163] disabled:opacity-50"
                               >
                                 {resolving === e.id ? 'Resolving...' : 'Mark as Resolved'}
                               </button>

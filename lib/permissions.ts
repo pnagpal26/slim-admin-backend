@@ -19,6 +19,10 @@ const PERMISSIONS = {
   // Admin user management
   invite_admin: ['super_admin'],
   deactivate_admin: ['super_admin'],
+  edit_admin: ['super_admin'],
+  change_role_admin: ['super_admin'],
+  reactivate_admin: ['super_admin'],
+  delete_admin: ['super_admin'],
   view_admin_users: ['super_admin'],
 
   // Views

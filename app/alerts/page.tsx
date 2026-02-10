@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { TIER_LABELS } from '@/lib/constants'
 
 interface AlertData {
   last_viewed: string | null
@@ -11,10 +12,6 @@ interface AlertData {
   pending_cancellations: { team_id: string; team_name: string; email: string; plan_tier: string; cancellation_date: string | null }[]
   inactive_accounts: { team_id: string; team_name: string; email: string; signup_date: string; days_since_login: number; is_trial: boolean }[]
   high_usage: { team_id: string; team_name: string; installed: number; plan_limit: number; plan_tier: string; usage_text: string }[]
-}
-
-const TIER_LABELS: Record<string, string> = {
-  free_trial: 'Free Trial', solo: 'Solo', small: 'Small Team', medium: 'Medium Team', enterprise: 'Enterprise',
 }
 
 function formatDate(d: string | null): string {
@@ -81,13 +78,25 @@ function Section({
   )
 }
 
+const ROLE_LABELS: Record<string, string> = { super_admin: 'Super Admin', support_l1: 'Support L1', support_l2: 'Support L2' }
+
 export default function AlertsPage() {
   const router = useRouter()
+  const [admin, setAdmin] = useState<{ first_name: string; last_name: string; role: string } | null>(null)
   const [data, setData] = useState<AlertData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/alerts/list')
+    fetch('/api/auth/me', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setAdmin(d.admin) }).catch(() => {})
+  }, [])
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/login')
+  }
+
+  useEffect(() => {
+    fetch('/api/alerts/list', { cache: 'no-store' })
       .then((r) => {
         if (!r.ok) {
           if (r.status === 401) { router.push('/login'); return null }
@@ -120,11 +129,21 @@ export default function AlertsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-4">
-          <a href="/dashboard" className="text-lg font-semibold text-gray-900 hover:text-gray-700">SLIM Admin</a>
-          <span className="text-gray-300">/</span>
-          <h1 className="text-lg font-medium text-gray-700">Alerts</h1>
+      <header className="bg-[#0D7377]">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <a href="/dashboard" className="text-lg font-semibold text-white hover:text-white/90">SLIM Admin</a>
+            <span className="text-white/40">/</span>
+            <h1 className="text-lg font-medium text-white/90">Alerts</h1>
+          </div>
+          {admin && (
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-white/80">
+                {[admin.first_name, admin.last_name].filter(Boolean).join(' ')} <span className="text-white/60">({ROLE_LABELS[admin.role] || admin.role})</span>
+              </span>
+              <button onClick={handleLogout} className="text-sm text-white/70 hover:text-white transition-colors">Sign out</button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -132,7 +151,7 @@ export default function AlertsPage() {
         <div className="max-w-7xl mx-auto px-4 flex gap-6 text-sm">
           <a href="/dashboard" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Dashboard</a>
           <a href="/customers" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Customers</a>
-          <a href="/alerts" className="py-2.5 border-b-2 border-gray-900 text-gray-900 font-medium">Alerts</a>
+          <a href="/alerts" className="py-2.5 border-b-2 border-[#0D7377] text-[#0D7377] font-medium">Alerts</a>
           <a href="/errors" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Errors</a>
           <a href="/audit" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Audit Log</a>
         </div>

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { requireRole, handleApiError, computeCustomerStatus } from '@/lib/api-helpers'
 import { formatPersonName } from '@/lib/utils/format'
+import { LOCKBOX_LIMITS } from '@/lib/constants'
 
 export async function GET(req: NextRequest) {
   try {
@@ -113,15 +114,7 @@ export async function GET(req: NextRequest) {
       out_of_service: lockboxStatuses.filter((l) => l.status === 'out_of_service').length,
     }
 
-    // Plan limits for usage percentage
-    const planLimits: Record<string, number> = {
-      free_trial: 5,
-      solo: 1,
-      small: 5,
-      medium: 15,
-      enterprise: 9999,
-    }
-    const planLimit = planLimits[team.plan_tier] || 5
+    const planLimit = LOCKBOX_LIMITS[team.plan_tier] || 25
 
     return NextResponse.json({
       account: {
@@ -134,7 +127,7 @@ export async function GET(req: NextRequest) {
         last_login: lastLogin,
         status,
         leader: leader
-          ? { id: leader.id, name: [formatPersonName(leader.first_name), formatPersonName(leader.last_name)].filter(Boolean).join(' '), email: leader.email, phone: leader.phone }
+          ? { id: leader.id, first_name: formatPersonName(leader.first_name), last_name: formatPersonName(leader.last_name), name: [formatPersonName(leader.first_name), formatPersonName(leader.last_name)].filter(Boolean).join(' '), email: leader.email, phone: leader.phone }
           : null,
         stripe: stripeData
           ? {

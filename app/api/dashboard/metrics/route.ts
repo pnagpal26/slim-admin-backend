@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       { data: teams },
       { data: signups24h },
       { data: signups7d },
-      { data: codeViews },
+      { count: codeViewCount },
       { data: lockboxes },
     ] = await Promise.all([
       supabase
@@ -34,10 +34,12 @@ export async function GET(req: NextRequest) {
       supabase
         .from('audit_log')
         .select('id', { count: 'exact', head: true })
-        .eq('action', 'code_viewed'),
+        .eq('action', 'code_viewed')
+        .gte('performed_at', new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()),
       supabase
         .from('lockboxes')
-        .select('id, status'),
+        .select('id, status')
+        .is('deleted_at', null),
     ])
 
     // --- Card 1: New Signups (24h) ---
@@ -53,9 +55,6 @@ export async function GET(req: NextRequest) {
     for (const t of s7d) {
       signups7dByTier[t.plan_tier] = (signups7dByTier[t.plan_tier] || 0) + 1
     }
-
-    // --- Card 3: Total Lockbox Code Views ---
-    const totalCodeViews = codeViews as unknown as { count: number } | null
 
     // --- Card 4: Total Customers (active, exclude cancelled/pending_cancellation) ---
     const allTeams = (teams || []) as {
@@ -82,7 +81,7 @@ export async function GET(req: NextRequest) {
     // --- Card 6: Total Active Installations ---
     const totalInstalled = allLockboxes.filter((l) => l.status === 'installed').length
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       signups_24h: {
         total: s24h.length,
         by_tier: signups24hByTier,
@@ -91,7 +90,7 @@ export async function GET(req: NextRequest) {
         total: s7d.length,
         by_tier: signups7dByTier,
       },
-      total_code_views: (totalCodeViews as unknown as { count: number })?.count ?? 0,
+      total_code_views: codeViewCount ?? 0,
       total_customers: {
         active: totalActiveCustomers,
         trial: activeTrial,
@@ -101,6 +100,8 @@ export async function GET(req: NextRequest) {
       total_lockboxes: totalLockboxes,
       total_installed: totalInstalled,
     })
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    return res
   } catch (error) {
     return handleApiError(error)
   }

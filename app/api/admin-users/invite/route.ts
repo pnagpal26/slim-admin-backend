@@ -3,16 +3,27 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { requireRole, handleApiError, logAdminAction } from '@/lib/api-helpers'
+import { sendAdminInviteEmail } from '@/lib/email'
 import crypto from 'crypto'
 
 export async function POST(req: NextRequest) {
   try {
     const admin = requireRole(req, 'invite_admin')
-    const { email, firstName, lastName, role } = await req.json()
+    const { email, firstName, lastName, phone, role } = await req.json()
 
-    if (!email || !firstName || !role) {
+    if (!email || !firstName || !role || !phone) {
       return NextResponse.json(
-        { error: 'Email, first name, and role are required' },
+        { error: 'Email, first name, phone, and role are required' },
+        { status: 400 }
+      )
+    }
+
+    // Validate phone: must be 7-15 digits, optional leading +, optional spaces/dashes/parens
+    const phoneClean = phone.trim()
+    const phoneDigits = phoneClean.replace(/[\s\-().+]/g, '')
+    if (phoneDigits.length < 7 || phoneDigits.length > 15 || !/^\+?[\d\s\-().]+$/.test(phoneClean)) {
+      return NextResponse.json(
+        { error: 'Phone must be a valid number (7-15 digits, e.g. +1 416-555-0199)' },
         { status: 400 }
       )
     }
@@ -70,6 +81,7 @@ export async function POST(req: NextRequest) {
         email: normalizedEmail,
         first_name: firstName.trim(),
         last_name: (lastName || '').trim(),
+        phone: (phone || '').trim() || null,
         role,
         token,
         invited_by: admin.adminId,
@@ -87,10 +99,17 @@ export async function POST(req: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'
     const setupUrl = `${appUrl}/setup?token=${token}`
 
-    // TODO: Send invitation email when email service is configured.
-    // For now, log the URL and return it so the Super Admin can share it manually.
-    // The main SLIM app also uses console.log for email flows pending email integration.
-    console.log(`[Admin Invite] Setup link for ${normalizedEmail}: ${setupUrl}`)
+    // Send invitation email
+    const emailResult = await sendAdminInviteEmail({
+      to: normalizedEmail,
+      inviteeName: firstName.trim(),
+      role,
+      setupUrl,
+    })
+
+    if (!emailResult.success) {
+      console.error(`[Admin Invite] Email failed for ${normalizedEmail}:`, emailResult.error)
+    }
 
     await logAdminAction(admin.adminId, 'invite_admin', {
       details: {
@@ -98,12 +117,16 @@ export async function POST(req: NextRequest) {
         invited_name: [firstName, lastName].filter(Boolean).join(' ').trim(),
         invited_role: role,
         invitation_id: invitation.id,
+        email_sent: emailResult.success,
+        ...(emailResult.error ? { email_error: emailResult.error } : {}),
       },
     })
 
     return NextResponse.json({
       invitation,
-      setup_url: setupUrl,
+      email_sent: emailResult.success,
+      ...(emailResult.error ? { email_warning: 'Invitation created but email delivery failed. Share the setup link manually.' } : {}),
+      ...(!emailResult.success ? { setup_url: setupUrl } : {}),
     })
   } catch (error) {
     return handleApiError(error)

@@ -116,7 +116,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading || !isFormValid}
-              className="w-full bg-gray-900 text-white rounded py-2 text-sm font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full bg-[#0D7377] text-white rounded py-2 text-sm font-medium hover:bg-[#0B6163] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? 'Signing in...' : 'Sign in'}
             </button>

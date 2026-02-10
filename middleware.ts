@@ -14,7 +14,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/errors') ||
     pathname.startsWith('/audit') ||
     pathname.startsWith('/admin-users')
-  const isProtectedApi = pathname.startsWith('/api') && !pathname.startsWith('/api/auth/login')
+  const isProtectedApi = pathname.startsWith('/api') && !pathname.startsWith('/api/auth/login') && !pathname.startsWith('/api/auth/setup')
   const isSetupPage = pathname.startsWith('/setup')
 
   if (isProtectedPage || isProtectedApi) {

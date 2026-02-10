@@ -155,7 +155,7 @@ function SetupForm() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full bg-gray-900 text-white rounded py-2 text-sm font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full bg-[#0D7377] text-white rounded py-2 text-sm font-medium hover:bg-[#0B6163] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {submitting ? 'Creating account...' : 'Create account'}
             </button>

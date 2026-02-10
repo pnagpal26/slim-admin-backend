@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { requireRole, handleApiError, computeCustomerStatus } from '@/lib/api-helpers'
 import { ADMIN_COOKIE_NAME, verifyAdminToken } from '@/lib/auth'
+import { LOCKBOX_LIMITS } from '@/lib/constants'
 
 export async function GET(req: NextRequest) {
   try {
@@ -71,10 +72,6 @@ export async function GET(req: NextRequest) {
     const pendingCancellations: { team_id: string; team_name: string; email: string; plan_tier: string; cancellation_date: string | null }[] = []
     const inactiveAccounts: { team_id: string; team_name: string; email: string; signup_date: string; days_since_login: number; is_trial: boolean }[] = []
     const highUsage: { team_id: string; team_name: string; installed: number; plan_limit: number; plan_tier: string; usage_text: string }[] = []
-
-    const planLimits: Record<string, number> = {
-      free_trial: 5, solo: 1, small: 5, medium: 15, enterprise: 9999,
-    }
 
     for (const team of allTeams) {
       const stripe = team.stripe_customers?.[0] || null
@@ -147,9 +144,9 @@ export async function GET(req: NextRequest) {
 
       // 6. High Usage (> 80% of plan limit)
       if (status !== 'cancelled') {
-        const limit = planLimits[team.plan_tier] || 5
+        const limit = LOCKBOX_LIMITS[team.plan_tier] || 25
         const installed = team.lockboxes?.filter((l) => l.status === 'installed').length || 0
-        if (limit < 9999 && installed > 0) {
+        if (isFinite(limit) && installed > 0) {
           const percent = Math.round((installed / limit) * 100)
           if (percent > 80) {
             highUsage.push({

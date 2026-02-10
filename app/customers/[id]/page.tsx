@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { TIER_LABELS, STATUS_COLORS, STATUS_LABELS } from '@/lib/constants'
 
 interface AccountInfo {
   id: string
@@ -12,7 +13,7 @@ interface AccountInfo {
   trial_ends_at: string | null
   last_login: string | null
   status: string
-  leader: { id: string; first_name: string; last_name: string; email: string; phone: string | null } | null
+  leader: { id: string; first_name: string; last_name: string; name: string; email: string; phone: string | null } | null
   stripe: {
     subscription_status: string
     cancel_at_period_end: boolean
@@ -66,30 +67,6 @@ interface ActivityEntry {
   user: { id: string; first_name: string; last_name: string; email: string } | null
 }
 
-const TIER_LABELS: Record<string, string> = {
-  free_trial: 'Free Trial',
-  solo: 'Solo Agent',
-  small: 'Small Team',
-  medium: 'Medium Team',
-  enterprise: 'Enterprise',
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  active_trial: 'bg-blue-100 text-blue-800',
-  active_paid: 'bg-green-100 text-green-800',
-  past_due: 'bg-red-100 text-red-800',
-  pending_cancellation: 'bg-yellow-100 text-yellow-800',
-  cancelled: 'bg-gray-100 text-gray-600',
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  active_trial: 'Active Trial',
-  active_paid: 'Active Paid',
-  past_due: 'Past Due',
-  pending_cancellation: 'Pending Cancellation',
-  cancelled: 'Cancelled',
-}
-
 const ROLE_LABELS: Record<string, string> = {
   solo_agent: 'Solo Agent',
   team_leader: 'Team Leader',
@@ -137,8 +114,9 @@ export default function CustomerDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  // Admin role for permission checks
+  // Admin info for permission checks + header
   const [adminRole, setAdminRole] = useState<string | null>(null)
+  const [adminInfo, setAdminInfo] = useState<{ first_name: string; last_name: string; role: string } | null>(null)
 
   // Modal state
   const [showExtendTrial, setShowExtendTrial] = useState(false)
@@ -171,7 +149,7 @@ export default function CustomerDetailPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/customers/detail?id=${teamId}`)
+        const res = await fetch(`/api/customers/detail?id=${teamId}`, { cache: 'no-store' })
         if (!res.ok) {
           if (res.status === 401) { router.push('/login'); return }
           if (res.status === 404) { setError('Customer not found'); return }
@@ -196,10 +174,11 @@ export default function CustomerDetailPage() {
   useEffect(() => {
     async function fetchAdminRole() {
       try {
-        const res = await fetch('/api/auth/me')
+        const res = await fetch('/api/auth/me', { cache: 'no-store' })
         if (res.ok) {
           const data = await res.json()
           setAdminRole(data.admin?.role || null)
+          if (data.admin) setAdminInfo(data.admin)
         }
       } catch {
         // Ignore errors - permission buttons just won't show
@@ -207,6 +186,11 @@ export default function CustomerDetailPage() {
     }
     fetchAdminRole()
   }, [])
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/login')
+  }
 
   async function handleExtendTrial() {
     setModalError('')
@@ -383,19 +367,29 @@ export default function CustomerDetailPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200">
+      <header className="bg-[#0D7377]">
         <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-            <a href="/dashboard" className="hover:text-gray-700">SLIM Admin</a>
-            <span>/</span>
-            <a href="/customers" className="hover:text-gray-700">Customers</a>
-            <span>/</span>
-            <span className="text-gray-900">{account.team_name}</span>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 text-sm text-white/70">
+              <a href="/dashboard" className="hover:text-white">SLIM Admin</a>
+              <span>/</span>
+              <a href="/customers" className="hover:text-white">Customers</a>
+              <span>/</span>
+              <span className="text-white">{account.team_name}</span>
+            </div>
+            {adminInfo && (
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-white/80">
+                  {[adminInfo.first_name, adminInfo.last_name].filter(Boolean).join(' ')} <span className="text-white/60">({ROLE_LABELS[adminInfo.role] || adminInfo.role})</span>
+                </span>
+                <button onClick={handleLogout} className="text-sm text-white/70 hover:text-white transition-colors">Sign out</button>
+              </div>
+            )}
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-semibold text-gray-900">{account.team_name}</h1>
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[account.status] || ''}`}>
+              <h1 className="text-xl font-semibold text-white">{account.team_name}</h1>
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[account.status] || 'bg-white/20 text-white'}`}>
                 {STATUS_LABELS[account.status] || account.status}
               </span>
             </div>
@@ -403,7 +397,7 @@ export default function CustomerDetailPage() {
               {account.status === 'active_trial' && (
                 <button
                   onClick={() => { closeModal(); setShowExtendTrial(true) }}
-                  className="px-3 py-1.5 text-sm rounded border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
+                  className="px-3 py-1.5 text-sm rounded border border-white/30 text-white bg-white/15 hover:bg-white/25 transition-colors"
                 >
                   Extend Trial
                 </button>
@@ -411,7 +405,7 @@ export default function CustomerDetailPage() {
               {account.status === 'active_paid' && (
                 <button
                   onClick={() => { closeModal(); setShowCompMonth(true) }}
-                  className="px-3 py-1.5 text-sm rounded border border-green-300 text-green-700 bg-green-50 hover:bg-green-100 transition-colors"
+                  className="px-3 py-1.5 text-sm rounded border border-white/30 text-white bg-white/15 hover:bg-white/25 transition-colors"
                 >
                   Comp 1 Month
                 </button>
@@ -467,7 +461,7 @@ export default function CustomerDetailPage() {
           {account.leader && (
             <div className="mt-4 pt-4 border-t border-gray-100">
               <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">
-                {account.plan_tier === 'solo' ? 'Account Owner' : 'Team Leader'}
+                {members.length <= 1 ? 'Account Owner' : 'Team Leader'}
               </p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                 <div>
@@ -697,7 +691,7 @@ export default function CustomerDetailPage() {
             )}
             {modalSuccess && (
               <div className="flex justify-end">
-                <button onClick={closeModal} className="px-4 py-2 text-sm rounded bg-gray-900 text-white hover:bg-gray-800">
+                <button onClick={closeModal} className="px-4 py-2 text-sm rounded bg-[#0D7377] text-white hover:bg-[#0B6163]">
                   Done
                 </button>
               </div>
@@ -749,7 +743,7 @@ export default function CustomerDetailPage() {
             )}
             {modalSuccess && (
               <div className="flex justify-end">
-                <button onClick={closeModal} className="px-4 py-2 text-sm rounded bg-gray-900 text-white hover:bg-gray-800">
+                <button onClick={closeModal} className="px-4 py-2 text-sm rounded bg-[#0D7377] text-white hover:bg-[#0B6163]">
                   Done
                 </button>
               </div>
@@ -846,7 +840,7 @@ export default function CustomerDetailPage() {
             )}
             {editSuccess && (
               <div className="flex justify-end">
-                <button onClick={closeEditModal} className="px-4 py-2 text-sm rounded bg-gray-900 text-white hover:bg-gray-800">
+                <button onClick={closeEditModal} className="px-4 py-2 text-sm rounded bg-[#0D7377] text-white hover:bg-[#0B6163]">
                   Done
                 </button>
               </div>
