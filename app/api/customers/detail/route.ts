@@ -22,6 +22,8 @@ export async function GET(req: NextRequest) {
       .from('teams')
       .select(`
         id, name, plan_tier, billing_exempt, created_at, trial_ends_at,
+        account_status, suspended_at, suspended_reason, suspended_by_admin_id,
+        re_enabled_at, re_enabled_by,
         stripe_customers(
           stripe_customer_id, stripe_subscription_id, subscription_status,
           cancel_at_period_end, current_period_end, created_at
@@ -126,6 +128,12 @@ export async function GET(req: NextRequest) {
         trial_ends_at: team.trial_ends_at,
         last_login: lastLogin,
         status,
+        account_status: team.account_status || 'active',
+        suspended_at: team.suspended_at || null,
+        suspended_reason: team.suspended_reason || null,
+        suspended_by_admin_id: team.suspended_by_admin_id || null,
+        re_enabled_at: team.re_enabled_at || null,
+        re_enabled_by: team.re_enabled_by || null,
         leader: leader
           ? { id: leader.id, first_name: formatPersonName(leader.first_name), last_name: formatPersonName(leader.last_name), name: [formatPersonName(leader.first_name), formatPersonName(leader.last_name)].filter(Boolean).join(' '), email: leader.email, phone: leader.phone }
           : null,

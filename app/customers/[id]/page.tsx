@@ -13,6 +13,12 @@ interface AccountInfo {
   trial_ends_at: string | null
   last_login: string | null
   status: string
+  account_status: string
+  suspended_at: string | null
+  suspended_reason: string | null
+  suspended_by_admin_id: string | null
+  re_enabled_at: string | null
+  re_enabled_by: string | null
   leader: { id: string; first_name: string; last_name: string; name: string; email: string; phone: string | null } | null
   stripe: {
     subscription_status: string
@@ -145,6 +151,13 @@ export default function CustomerDetailPage() {
   const [deleteReason, setDeleteReason] = useState('')
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+
+  // Re-enable modal state
+  const [showReEnable, setShowReEnable] = useState(false)
+  const [reEnableReason, setReEnableReason] = useState('')
+  const [reEnableLoading, setReEnableLoading] = useState(false)
+  const [reEnableError, setReEnableError] = useState('')
+  const [reEnableSuccess, setReEnableSuccess] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -340,8 +353,52 @@ export default function CustomerDetailPage() {
     }
   }
 
+  function openReEnableModal() {
+    setReEnableReason('')
+    setReEnableError('')
+    setReEnableSuccess('')
+    setShowReEnable(true)
+  }
+
+  function closeReEnableModal() {
+    setShowReEnable(false)
+    setReEnableReason('')
+    setReEnableError('')
+    setReEnableSuccess('')
+  }
+
+  async function handleReEnable() {
+    setReEnableError('')
+    setReEnableSuccess('')
+    setReEnableLoading(true)
+    try {
+      const res = await fetch('/api/customers/re-enable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamId,
+          reason: reEnableReason,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setReEnableError(data.error); return }
+      setReEnableSuccess('Account re-enabled successfully')
+      // Update local state
+      setAccount((prev) => prev ? {
+        ...prev,
+        account_status: 'active',
+        re_enabled_at: new Date().toISOString(),
+      } : prev)
+    } catch {
+      setReEnableError('Network error')
+    } finally {
+      setReEnableLoading(false)
+    }
+  }
+
   const canEdit = adminRole === 'super_admin' || adminRole === 'support_l2'
   const canDelete = adminRole === 'super_admin'
+  const canReEnable = adminRole === 'super_admin' || adminRole === 'support_l2'
 
   if (loading) {
     return (
@@ -416,6 +473,54 @@ export default function CustomerDetailPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        {/* Suspension Alert */}
+        {account.account_status && account.account_status !== 'active' && (
+          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-5">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-red-700 mb-2">Account Suspended</h2>
+                <div className="space-y-2 text-sm">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-red-600 font-medium">Status</p>
+                      <p className="text-red-700">
+                        {account.account_status === 'suspended_chargeback' && 'Suspended - Chargeback'}
+                        {account.account_status === 'suspended_fraud' && 'Suspended - Fraud'}
+                        {account.account_status === 'suspended_abuse' && 'Suspended - Abuse'}
+                        {account.account_status === 'suspended_other' && 'Suspended - Other'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-red-600 font-medium">Suspended At</p>
+                      <p className="text-red-700">{formatDateTime(account.suspended_at)}</p>
+                    </div>
+                  </div>
+                  {account.suspended_reason && (
+                    <div>
+                      <p className="text-red-600 font-medium">Reason</p>
+                      <p className="text-red-700 bg-white/60 rounded px-3 py-2 mt-1">{account.suspended_reason}</p>
+                    </div>
+                  )}
+                  {account.re_enabled_at && (
+                    <div className="mt-3 pt-3 border-t border-red-200">
+                      <p className="text-green-700 font-medium">Previously Re-enabled</p>
+                      <p className="text-sm text-gray-600">Re-enabled at: {formatDateTime(account.re_enabled_at)}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {canReEnable && (
+                <button
+                  onClick={openReEnableModal}
+                  className="ml-4 px-4 py-2 text-sm rounded bg-green-600 text-white hover:bg-green-700 transition-colors"
+                >
+                  Re-enable Account
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Section A: Account Info */}
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-4">
@@ -905,6 +1010,59 @@ export default function CustomerDetailPage() {
                 {deleteLoading ? 'Deleting...' : 'Delete Permanently'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Re-enable Account Modal */}
+      {showReEnable && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={closeReEnableModal}>
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-green-700 mb-4">Re-enable Account</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Re-enable the suspended account for <strong>{account.team_name}</strong>.
+              This will restore access for all team members.
+            </p>
+            {reEnableError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mb-3">{reEnableError}</div>
+            )}
+            {reEnableSuccess && (
+              <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded px-3 py-2 mb-3">{reEnableSuccess}</div>
+            )}
+            {!reEnableSuccess && (
+              <>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Reason (required, min 10 characters)</label>
+                  <textarea
+                    value={reEnableReason}
+                    onChange={(e) => setReEnableReason(e.target.value)}
+                    rows={3}
+                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="Why is this account being re-enabled?"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">{reEnableReason.length}/10 characters minimum</p>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button onClick={closeReEnableModal} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleReEnable}
+                    disabled={reEnableLoading || reEnableReason.trim().length < 10}
+                    className="px-4 py-2 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {reEnableLoading ? 'Re-enabling...' : 'Re-enable Account'}
+                  </button>
+                </div>
+              </>
+            )}
+            {reEnableSuccess && (
+              <div className="flex justify-end">
+                <button onClick={closeReEnableModal} className="px-4 py-2 text-sm rounded bg-[#0D7377] text-white hover:bg-[#0B6163]">
+                  Done
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
