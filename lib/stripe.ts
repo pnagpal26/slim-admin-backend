@@ -8,7 +8,7 @@ export async function getStripe(): Promise<Stripe> {
 
   const secretKey = await getSecret('STRIPE_SECRET_KEY')
   stripeInstance = new Stripe(secretKey, {
-    apiVersion: '2025-02-24.acacia',
+    apiVersion: '2026-01-28.clover',
   })
   return stripeInstance
 }
