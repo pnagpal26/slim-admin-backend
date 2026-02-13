@@ -19,6 +19,11 @@ export async function GET(req: NextRequest) {
       { data: signups7d },
       { count: codeViewCount },
       { data: lockboxes },
+      { count: disputesOpen },
+      { count: disputesWarning },
+      { data: disputesDeadline },
+      { data: refunds7d },
+      { count: suspendedAccounts },
     ] = await Promise.all([
       supabase
         .from('teams')
@@ -40,6 +45,33 @@ export async function GET(req: NextRequest) {
         .from('lockboxes')
         .select('id, status')
         .is('deleted_at', null),
+      // Disputes needing action (needs_response status)
+      supabase
+        .from('disputes')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'needs_response'),
+      // Disputes in warning (early warning status)
+      supabase
+        .from('disputes')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'warning_needs_response'),
+      // Disputes with upcoming deadlines (next 48 hours)
+      supabase
+        .from('disputes')
+        .select('id, evidence_due_by')
+        .in('status', ['warning_needs_response', 'needs_response'])
+        .lte('evidence_due_by', new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString())
+        .order('evidence_due_by', { ascending: true }),
+      // Refunds in last 7 days
+      supabase
+        .from('refunds')
+        .select('id, amount_refunded, status')
+        .gte('created_at', ago7d),
+      // Suspended accounts
+      supabase
+        .from('teams')
+        .select('id', { count: 'exact', head: true })
+        .neq('account_status', 'active'),
     ])
 
     // --- Card 1: New Signups (24h) ---
@@ -81,6 +113,14 @@ export async function GET(req: NextRequest) {
     // --- Card 6: Total Active Installations ---
     const totalInstalled = allLockboxes.filter((l) => l.status === 'installed').length
 
+    // --- Financial Metrics ---
+    // Calculate refund metrics
+    const totalRefunded7d = refunds7d?.reduce((sum, r) => sum + r.amount_refunded, 0) || 0
+    const refundsByStatus = refunds7d?.reduce((acc, r) => {
+      acc[r.status] = (acc[r.status] || 0) + 1
+      return acc
+    }, {} as Record<string, number>) || {}
+
     const res = NextResponse.json({
       signups_24h: {
         total: s24h.length,
@@ -99,6 +139,16 @@ export async function GET(req: NextRequest) {
       },
       total_lockboxes: totalLockboxes,
       total_installed: totalInstalled,
+      financial: {
+        disputes_needing_action: (disputesOpen || 0) + (disputesWarning || 0),
+        disputes_urgent_deadline: disputesDeadline?.length || 0,
+        refunds_7d: {
+          count: refunds7d?.length || 0,
+          total_amount: totalRefunded7d,
+          by_status: refundsByStatus,
+        },
+        suspended_accounts: suspendedAccounts || 0,
+      },
     })
     res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
     return res
