@@ -317,7 +317,8 @@ export default function DashboardPage() {
           {/* Card 4: Email Delivery Issues */}
           {bounceMetrics && (
             <div
-              className={`rounded-2xl p-6 bg-white border transition-transform duration-200 hover:-translate-y-0.5 ${
+              onClick={() => router.push('/customers?sort=bounce_count&order=desc')}
+              className={`rounded-2xl p-6 bg-white border transition-transform duration-200 hover:-translate-y-0.5 cursor-pointer ${
                 bounceMetrics.critical_24h > 5
                   ? 'border-orange-300 bg-orange-50'
                   : 'border-gray-200'

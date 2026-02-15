@@ -128,6 +128,18 @@ export async function GET(req: NextRequest) {
         return sortOrder === 'asc' ? cmp : -cmp
       }
 
+      if (sortBy === 'team_name') {
+        // String sort for team name
+        const cmp = a.team_name.localeCompare(b.team_name)
+        return sortOrder === 'asc' ? cmp : -cmp
+      }
+
+      if (sortBy === 'plan_tier') {
+        // String sort for plan tier
+        const cmp = a.plan_tier.localeCompare(b.plan_tier)
+        return sortOrder === 'asc' ? cmp : -cmp
+      }
+
       // Date sorts
       let aVal: string | null
       let bVal: string | null

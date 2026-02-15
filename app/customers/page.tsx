@@ -237,9 +237,19 @@ function CustomersContent() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50 text-left">
-                  <th className="px-4 py-3 font-medium text-gray-600">Team Name</th>
+                  <th
+                    className="px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none"
+                    onClick={() => handleSort('team_name')}
+                  >
+                    Team Name{sortIndicator('team_name')}
+                  </th>
                   <th className="px-4 py-3 font-medium text-gray-600">Contact Email</th>
-                  <th className="px-4 py-3 font-medium text-gray-600">Plan</th>
+                  <th
+                    className="px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none"
+                    onClick={() => handleSort('plan_tier')}
+                  >
+                    Plan{sortIndicator('plan_tier')}
+                  </th>
                   <th
                     className="px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none"
                     onClick={() => handleSort('signup_date')}
@@ -298,9 +308,9 @@ function CustomersContent() {
                         {c.bounce_count > 0 ? (
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
                             c.bounce_count >= 5
-                              ? 'bg-orange-100 text-orange-700'
+                              ? 'bg-red-100 text-red-700 font-semibold'
                               : c.bounce_count >= 2
-                              ? 'bg-yellow-100 text-yellow-700'
+                              ? 'bg-yellow-100 text-yellow-800'
                               : 'bg-gray-100 text-gray-600'
                           }`}>
                             {c.bounce_count >= 5 && '⚠️ '}

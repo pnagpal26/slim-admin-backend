@@ -159,6 +159,13 @@ function formatTemplateLabel(templateKey: string): string {
   return labels[templateKey] || templateKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
 }
 
+function formatAction(action: string): string {
+  return action
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
 export default function CustomerDetailPage() {
   const router = useRouter()
   const params = useParams()
@@ -863,7 +870,7 @@ export default function CustomerDetailPage() {
                     </td>
                     <td className="px-5 py-2.5">
                       <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-medium">
-                        {a.action}
+                        {formatAction(a.action)}
                       </span>
                     </td>
                     <td className="px-5 py-2.5 text-gray-500 text-xs max-w-xs truncate">
