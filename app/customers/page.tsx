@@ -241,7 +241,7 @@ function CustomersContent() {
                     className="px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none"
                     onClick={() => handleSort('team_name')}
                   >
-                    Team Name{sortIndicator('team_name')}
+                    Name{sortIndicator('team_name')}
                   </th>
                   <th className="px-4 py-3 font-medium text-gray-600">Contact Email</th>
                   <th
@@ -263,11 +263,15 @@ function CustomersContent() {
                     Last Login{sortIndicator('last_login')}
                   </th>
                   <th
-                    className="px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none text-center"
+                    className="px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none text-center group relative"
                     onClick={() => handleSort('bounce_count')}
-                    title="Bounced emails in last 30 days"
                   >
-                    Bounces{sortIndicator('bounce_count')}
+                    <span className="relative">
+                      Bounces{sortIndicator('bounce_count')}
+                      <span className="invisible group-hover:visible absolute left-1/2 -translate-x-1/2 top-full mt-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-10">
+                        Bounced emails in last 30 days
+                      </span>
+                    </span>
                   </th>
                   <th className="px-4 py-3 font-medium text-gray-600">Status</th>
                 </tr>
