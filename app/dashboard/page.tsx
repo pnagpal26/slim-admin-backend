@@ -31,6 +31,13 @@ interface Metrics {
   }
 }
 
+interface EmailBounceMetrics {
+  total_24h: number
+  critical_24h: number
+  billing_24h: number
+  teams_affected: number
+}
+
 function tierBreakdown(byTier: Record<string, number>): string {
   const parts: string[] = []
   for (const [tier, count] of Object.entries(byTier)) {
@@ -43,6 +50,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const [admin, setAdmin] = useState<AdminUser | null>(null)
   const [metrics, setMetrics] = useState<Metrics | null>(null)
+  const [bounceMetrics, setBounceMetrics] = useState<EmailBounceMetrics | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -55,10 +63,15 @@ export default function DashboardPage() {
         if (!r.ok) throw new Error('Failed')
         return r.json()
       }),
+      fetch('/api/dashboard/email-bounces', { cache: 'no-store' }).then((r) => {
+        if (!r.ok) throw new Error('Failed')
+        return r.json()
+      }),
     ])
-      .then(([authData, metricsData]) => {
+      .then(([authData, metricsData, bounceData]) => {
         setAdmin(authData.admin)
         setMetrics(metricsData)
+        setBounceMetrics(bounceData)
       })
       .catch(() => router.push('/login'))
       .finally(() => setLoading(false))
@@ -233,7 +246,7 @@ export default function DashboardPage() {
 
         {/* FINANCIAL HEALTH Section */}
         <p className="text-[13px] font-semibold text-gray-500 uppercase tracking-wide mb-4 mt-7">Financial Health</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {/* Card 1: Disputes Needing Action */}
           <div
             className="relative overflow-hidden rounded-2xl p-6 cursor-pointer transition-transform duration-200 hover:-translate-y-0.5"
@@ -300,6 +313,44 @@ export default function DashboardPage() {
             </p>
             <p className="text-[13px] text-gray-500 mt-1">Non-active status</p>
           </div>
+
+          {/* Card 4: Email Delivery Issues */}
+          {bounceMetrics && (
+            <div
+              className={`rounded-2xl p-6 bg-white border transition-transform duration-200 hover:-translate-y-0.5 ${
+                bounceMetrics.critical_24h > 5
+                  ? 'border-orange-300 bg-orange-50'
+                  : 'border-gray-200'
+              }`}
+              style={{ boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)' }}
+            >
+              <div className="flex items-center gap-2.5 mb-2">
+                <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm ${
+                  bounceMetrics.critical_24h > 5
+                    ? 'bg-orange-100 text-orange-600'
+                    : 'bg-gray-100 text-gray-600'
+                }`}>&#9993;</span>
+                <h3 className="text-[13px] font-medium text-gray-500">Email Delivery Issues</h3>
+              </div>
+              <p className={`text-4xl font-bold ${
+                bounceMetrics.critical_24h > 5 ? 'text-orange-700' : 'text-gray-800'
+              }`} style={{ letterSpacing: '-1px' }}>
+                {bounceMetrics.total_24h.toLocaleString()}
+              </p>
+              <p className="text-[13px] text-gray-500 mt-1">
+                {bounceMetrics.critical_24h > 0 && (
+                  <span className={`${bounceMetrics.critical_24h > 5 ? 'text-orange-700 font-medium' : 'text-gray-600'}`}>
+                    {bounceMetrics.critical_24h} critical
+                  </span>
+                )}
+                {bounceMetrics.critical_24h > 0 && bounceMetrics.billing_24h > 0 && ', '}
+                {bounceMetrics.billing_24h > 0 && (
+                  <span className="text-gray-600">{bounceMetrics.billing_24h} billing</span>
+                )}
+                {bounceMetrics.total_24h === 0 && 'No bounces in 24h'}
+              </p>
+            </div>
+          )}
         </div>
       </main>
     </div>

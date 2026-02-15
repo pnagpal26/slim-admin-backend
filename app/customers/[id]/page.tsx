@@ -73,6 +73,23 @@ interface ActivityEntry {
   user: { id: string; first_name: string; last_name: string; email: string } | null
 }
 
+interface BouncedEmail {
+  id: string
+  template_key: string
+  recipient: string
+  subject: string
+  sent_at: string
+  resend_id: string
+}
+
+interface BounceSummary {
+  bounced_count: number
+  total_sent: number
+  bounce_rate: number
+  by_template: Record<string, number>
+  problematic_emails: { email: string; count: number }[]
+}
+
 const ROLE_LABELS: Record<string, string> = {
   solo_agent: 'Solo Agent',
   team_leader: 'Team Leader',
@@ -107,6 +124,41 @@ function usageBg(percent: number): string {
   return 'bg-green-500'
 }
 
+function getTemplateBadgeStyle(templateKey: string): { bg: string; text: string; label: string } {
+  // Critical security emails - RED
+  if (['password_reset', 'email_verification_resend', 'admin_invitation', 'team_invite'].includes(templateKey)) {
+    return { bg: 'bg-red-100', text: 'text-red-700', label: 'Security' }
+  }
+  // Billing/trial emails - YELLOW
+  if (['payment_failed', 'trial_expiring', 'trial_expired', 'payment_first', 'payment_recurring'].includes(templateKey)) {
+    return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Billing' }
+  }
+  // Team coordination - BLUE
+  if (['team_member_joined', 'team_member_removed_member', 'team_member_removed_leader'].includes(templateKey)) {
+    return { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Team' }
+  }
+  // Default - GRAY
+  return { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Other' }
+}
+
+function formatTemplateLabel(templateKey: string): string {
+  const labels: Record<string, string> = {
+    'team_invite': 'Team Invitation',
+    'password_reset': 'Password Reset',
+    'email_verification_resend': 'Email Verification',
+    'admin_invitation': 'Admin Invitation',
+    'payment_failed': 'Payment Failed',
+    'trial_expiring': 'Trial Expiring',
+    'trial_expired': 'Trial Expired',
+    'team_member_joined': 'Member Joined',
+    'team_member_removed_member': 'Member Removed',
+    'team_member_removed_leader': 'Member Removed',
+    'payment_first': 'Payment Receipt',
+    'payment_recurring': 'Payment Receipt',
+  }
+  return labels[templateKey] || templateKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+}
+
 export default function CustomerDetailPage() {
   const router = useRouter()
   const params = useParams()
@@ -117,6 +169,8 @@ export default function CustomerDetailPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [activity, setActivity] = useState<ActivityEntry[]>([])
+  const [bouncedEmails, setBouncedEmails] = useState<BouncedEmail[]>([])
+  const [bounceSummary, setBounceSummary] = useState<BounceSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -162,18 +216,30 @@ export default function CustomerDetailPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/customers/detail?id=${teamId}`, { cache: 'no-store' })
-        if (!res.ok) {
-          if (res.status === 401) { router.push('/login'); return }
-          if (res.status === 404) { setError('Customer not found'); return }
+        const [detailRes, bouncesRes] = await Promise.all([
+          fetch(`/api/customers/detail?id=${teamId}`, { cache: 'no-store' }),
+          fetch(`/api/customers/bounced-emails?team_id=${teamId}`, { cache: 'no-store' }),
+        ])
+
+        if (!detailRes.ok) {
+          if (detailRes.status === 401) { router.push('/login'); return }
+          if (detailRes.status === 404) { setError('Customer not found'); return }
           throw new Error('Failed to load')
         }
-        const data = await res.json()
+
+        const data = await detailRes.json()
         setAccount(data.account)
         setUsage(data.usage)
         setMembers(data.members)
         setInvitations(data.invitations)
         setActivity(data.recent_activity)
+
+        // Load bounced emails (non-critical, don't fail if it errors)
+        if (bouncesRes.ok) {
+          const bouncesData = await bouncesRes.json()
+          setBouncedEmails(bouncesData.bounces)
+          setBounceSummary(bouncesData.summary)
+        }
       } catch {
         setError('Failed to load customer details')
       } finally {
@@ -677,7 +743,94 @@ export default function CustomerDetailPage() {
           </table>
         </div>
 
-        {/* Section D: Recent Activity */}
+        {/* Section D: Email Delivery History */}
+        {bounceSummary && bounceSummary.bounced_count > 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                Email Delivery History
+              </h2>
+            </div>
+
+            {/* Summary Stats */}
+            <div className="px-5 py-4 bg-orange-50 border-b border-orange-100">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-2xl">⚠️</span>
+                <p className="text-sm font-medium text-orange-800">
+                  {bounceSummary.bounced_count} email{bounceSummary.bounced_count !== 1 ? 's' : ''} bounced in last 30 days
+                  <span className="ml-2 text-orange-600">
+                    ({bounceSummary.bounce_rate}% bounce rate)
+                  </span>
+                </p>
+              </div>
+              {bounceSummary.problematic_emails.length > 0 && (
+                <p className="text-xs text-orange-700 mt-2">
+                  <strong>Pattern detected:</strong>{' '}
+                  {bounceSummary.problematic_emails.map(pe => `${pe.email} (${pe.count} bounces)`).join(', ')}
+                </p>
+              )}
+            </div>
+
+            {/* Bounced Emails Table */}
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50 text-left">
+                  <th className="px-5 py-2 font-medium text-gray-600">Type</th>
+                  <th className="px-5 py-2 font-medium text-gray-600">Recipient</th>
+                  <th className="px-5 py-2 font-medium text-gray-600">Subject</th>
+                  <th className="px-5 py-2 font-medium text-gray-600">Sent Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bouncedEmails.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-8 text-center text-gray-400 text-sm">
+                      No bounced emails in last 30 days
+                    </td>
+                  </tr>
+                ) : (
+                  bouncedEmails.map((bounce) => {
+                    const badgeStyle = getTemplateBadgeStyle(bounce.template_key)
+                    return (
+                      <tr key={bounce.id} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="px-5 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${badgeStyle.bg} ${badgeStyle.text}`}>
+                              {badgeStyle.label}
+                            </span>
+                            <span className="text-gray-600 text-xs">
+                              {formatTemplateLabel(bounce.template_key)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-2.5 text-gray-700 font-medium">
+                          {bounce.recipient}
+                        </td>
+                        <td className="px-5 py-2.5 text-gray-600 max-w-xs truncate">
+                          {bounce.subject}
+                        </td>
+                        <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap">
+                          {formatDateTime(bounce.sent_at)}
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+
+            {/* Show count if truncated */}
+            {bouncedEmails.length >= 50 && (
+              <div className="px-5 py-3 border-t border-gray-100 bg-gray-50">
+                <p className="text-xs text-gray-500 text-center">
+                  Showing 50 most recent bounces. Total: {bounceSummary.bounced_count}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Section E: Recent Activity */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">

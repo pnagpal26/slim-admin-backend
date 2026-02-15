@@ -57,6 +57,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch customers' }, { status: 500 })
     }
 
+    // Fetch bounce counts for all teams (last 30 days)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: bounces } = await supabase
+      .from('sent_emails')
+      .select('team_id')
+      .eq('status', 'bounced')
+      .gte('sent_at', thirtyDaysAgo)
+
+    // Create a map of team_id -> bounce_count
+    const bounceCountMap = new Map<string, number>()
+    bounces?.forEach((bounce) => {
+      const count = bounceCountMap.get(bounce.team_id) || 0
+      bounceCountMap.set(bounce.team_id, count + 1)
+    })
+
     // Transform each team into a customer row
     let customers = teams.map((team) => {
       const leader = team.users.find(
@@ -82,6 +97,7 @@ export async function GET(req: NextRequest) {
         last_login: lastLogin,
         status,
         member_count: team.users.filter((u) => u.is_active).length,
+        bounce_count: bounceCountMap.get(team.id) || 0,
       }
     })
 
@@ -106,6 +122,13 @@ export async function GET(req: NextRequest) {
 
     // Sort
     customers.sort((a, b) => {
+      if (sortBy === 'bounce_count') {
+        // Numeric sort for bounce count
+        const cmp = a.bounce_count - b.bounce_count
+        return sortOrder === 'asc' ? cmp : -cmp
+      }
+
+      // Date sorts
       let aVal: string | null
       let bVal: string | null
 

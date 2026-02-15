@@ -15,6 +15,7 @@ interface Customer {
   last_login: string | null
   status: string
   member_count: number
+  bounce_count: number
 }
 
 const STATUSES = [
@@ -251,19 +252,26 @@ function CustomersContent() {
                   >
                     Last Login{sortIndicator('last_login')}
                   </th>
+                  <th
+                    className="px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none text-center"
+                    onClick={() => handleSort('bounce_count')}
+                    title="Bounced emails in last 30 days"
+                  >
+                    Bounces{sortIndicator('bounce_count')}
+                  </th>
                   <th className="px-4 py-3 font-medium text-gray-600">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
+                    <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
                       Loading...
                     </td>
                   </tr>
                 ) : customers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
+                    <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
                       No customers found.
                     </td>
                   </tr>
@@ -286,6 +294,22 @@ function CustomersContent() {
                       </td>
                       <td className="px-4 py-3 text-gray-600">{formatDate(c.signup_date)}</td>
                       <td className="px-4 py-3 text-gray-600">{formatRelative(c.last_login)}</td>
+                      <td className="px-4 py-3 text-center">
+                        {c.bounce_count > 0 ? (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                            c.bounce_count >= 5
+                              ? 'bg-orange-100 text-orange-700'
+                              : c.bounce_count >= 2
+                              ? 'bg-yellow-100 text-yellow-700'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {c.bounce_count >= 5 && '⚠️ '}
+                            {c.bounce_count}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[c.status] || 'bg-gray-100 text-gray-600'}`}>
                           {STATUS_LABELS[c.status] || c.status}
