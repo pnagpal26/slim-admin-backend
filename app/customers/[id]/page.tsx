@@ -73,6 +73,34 @@ interface ActivityEntry {
   user: { id: string; first_name: string; last_name: string; email: string } | null
 }
 
+interface AssignedUser {
+  id: string
+  first_name: string
+  last_name: string
+  email: string
+}
+
+interface Lockbox {
+  id: string
+  lockbox_id: string
+  status: string
+  current_address: string | null
+  make_model: string | null
+  description: string | null
+  closing_date: string | null
+  installed_at: string | null
+  removed_at: string | null
+  checked_out_at: string | null
+  updated_at: string
+  created_at: string
+  assigned_to: AssignedUser | null
+}
+
+interface LockboxSummary {
+  total: number
+  by_status: Record<string, number>
+}
+
 interface SentEmail {
   id: string
   template_key: string
@@ -94,6 +122,15 @@ const ROLE_LABELS: Record<string, string> = {
   team_leader: 'Team Leader',
   team_admin: 'Team Admin',
   agent: 'Agent',
+}
+
+const LOCKBOX_STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  installed:     { bg: 'bg-teal-100',   text: 'text-teal-700',   label: 'Installed' },
+  checked_out:   { bg: 'bg-blue-100',   text: 'text-blue-700',   label: 'Checked Out' },
+  in_transit:    { bg: 'bg-orange-100', text: 'text-orange-700', label: 'In Transit' },
+  available:     { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Available' },
+  removed:       { bg: 'bg-gray-100',   text: 'text-gray-600',   label: 'Removed' },
+  out_of_service:{ bg: 'bg-red-100',    text: 'text-red-700',    label: 'Out of Service' },
 }
 
 const EMAIL_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -179,6 +216,9 @@ export default function CustomerDetailPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [activity, setActivity] = useState<ActivityEntry[]>([])
+  const [lockboxes, setLockboxes] = useState<Lockbox[]>([])
+  const [lockboxSummary, setLockboxSummary] = useState<LockboxSummary | null>(null)
+  const [lockboxStatusFilter, setLockboxStatusFilter] = useState<string>('all')
   const [emailHistory, setEmailHistory] = useState<SentEmail[]>([])
   const [emailSummary, setEmailSummary] = useState<EmailSummary | null>(null)
   const [emailStatusFilter, setEmailStatusFilter] = useState<string>('all')
@@ -258,9 +298,10 @@ export default function CustomerDetailPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [detailRes, emailsRes] = await Promise.all([
+        const [detailRes, emailsRes, lockboxesRes] = await Promise.all([
           fetch(`/api/customers/detail?id=${teamId}`, { cache: 'no-store' }),
           fetch(`/api/customers/emails?team_id=${teamId}`, { cache: 'no-store' }),
+          fetch(`/api/customers/lockboxes?team_id=${teamId}`, { cache: 'no-store' }),
         ])
 
         if (!detailRes.ok) {
@@ -280,6 +321,12 @@ export default function CustomerDetailPage() {
           const emailsData = await emailsRes.json()
           setEmailHistory(emailsData.emails)
           setEmailSummary(emailsData.summary)
+        }
+
+        if (lockboxesRes.ok) {
+          const lockboxesData = await lockboxesRes.json()
+          setLockboxes(lockboxesData.lockboxes)
+          setLockboxSummary(lockboxesData.summary)
         }
       } catch {
         setError('Failed to load customer details')
@@ -637,6 +684,11 @@ export default function CustomerDetailPage() {
     }
   }
 
+  // Lockbox filtered view
+  const filteredLockboxes = lockboxStatusFilter === 'all'
+    ? lockboxes
+    : lockboxes.filter((lb) => lb.status === lockboxStatusFilter)
+
   // Email history filtered view (client-side filter on the already-fetched data)
   const filteredEmails = emailStatusFilter === 'all'
     ? emailHistory
@@ -891,7 +943,97 @@ export default function CustomerDetailPage() {
           </div>
         </div>
 
-        {/* Section C: Team Members */}
+        {/* Section C: Lockbox Inventory */}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+              Lockbox Inventory
+              {lockboxSummary && (
+                <span className="ml-2 text-xs font-normal text-gray-400 normal-case">
+                  ({lockboxSummary.total} total)
+                </span>
+              )}
+            </h2>
+            {lockboxSummary && lockboxSummary.total > 0 && (
+              <div className="flex items-center gap-1">
+                {(['all', 'installed', 'checked_out', 'in_transit', 'available', 'removed', 'out_of_service'] as const).map((s) => {
+                  const count = s === 'all' ? lockboxSummary.total : (lockboxSummary.by_status[s] || 0)
+                  if (s !== 'all' && count === 0) return null
+                  const isActive = lockboxStatusFilter === s
+                  const style = LOCKBOX_STATUS_COLORS[s]
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => setLockboxStatusFilter(s)}
+                      className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
+                        isActive
+                          ? 'bg-[#0D7377] text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {s === 'all' ? 'All' : (style?.label || s)}
+                      {count > 0 && <span className="ml-1 opacity-75">({count})</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+          {lockboxes.length === 0 ? (
+            <div className="px-5 py-8 text-center text-gray-400 text-sm">No lockboxes added yet.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50 text-left">
+                  <th className="px-5 py-2 font-medium text-gray-600">ID</th>
+                  <th className="px-5 py-2 font-medium text-gray-600">Status</th>
+                  <th className="px-5 py-2 font-medium text-gray-600">Address</th>
+                  <th className="px-5 py-2 font-medium text-gray-600">Assigned To</th>
+                  <th className="px-5 py-2 font-medium text-gray-600">Last Activity</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLockboxes.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-6 text-center text-gray-400 text-sm">
+                      No lockboxes with this status.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredLockboxes.map((lb) => {
+                    const style = LOCKBOX_STATUS_COLORS[lb.status] || { bg: 'bg-gray-100', text: 'text-gray-600', label: lb.status }
+                    const lastActivity = lb.installed_at || lb.removed_at || lb.checked_out_at || lb.updated_at
+                    return (
+                      <tr key={lb.id} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="px-5 py-2.5 font-mono text-sm font-medium text-gray-800">
+                          {lb.lockbox_id}
+                        </td>
+                        <td className="px-5 py-2.5">
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${style.bg} ${style.text}`}>
+                            {style.label}
+                          </span>
+                        </td>
+                        <td className="px-5 py-2.5 text-gray-600 max-w-xs truncate">
+                          {lb.current_address || <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-5 py-2.5 text-gray-600">
+                          {lb.assigned_to
+                            ? [lb.assigned_to.first_name, lb.assigned_to.last_name].filter(Boolean).join(' ')
+                            : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap">
+                          {formatDateTime(lastActivity)}
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Section D: Team Members */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
