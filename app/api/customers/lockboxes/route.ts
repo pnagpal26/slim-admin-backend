@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { requireRole, handleApiError } from '@/lib/api-helpers'
 
+type LockboxUser = { id: string; first_name: string; last_name: string; email: string }
+
 export async function GET(req: NextRequest) {
   try {
     requireRole(req, 'view_customer_detail')
@@ -68,12 +70,7 @@ export async function GET(req: NextRequest) {
         updated_at: lb.updated_at,
         created_at: lb.created_at,
         assigned_to: lb.users
-          ? {
-              id: (lb.users as Record<string, unknown>).id as string,
-              first_name: (lb.users as Record<string, unknown>).first_name as string,
-              last_name: (lb.users as Record<string, unknown>).last_name as string,
-              email: (lb.users as Record<string, unknown>).email as string,
-            }
+          ? (lb.users as unknown as LockboxUser)
           : null,
       })),
       summary: {
