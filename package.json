@@ -21,6 +21,9 @@
     "resend": "6.9.1",
     "stripe": "20.3.1"
   },
+  "overrides": {
+    "fast-xml-parser": "5.3.6"
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "4",
     "@types/bcryptjs": "2.4.6",
