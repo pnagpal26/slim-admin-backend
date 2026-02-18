@@ -264,6 +264,13 @@ export default function CustomerDetailPage() {
   const [reEnableError, setReEnableError] = useState('')
   const [reEnableSuccess, setReEnableSuccess] = useState('')
 
+  // Suspend modal state
+  const [showSuspend, setShowSuspend] = useState(false)
+  const [suspendReason, setSuspendReason] = useState('chargeback')
+  const [suspendNotes, setSuspendNotes] = useState('')
+  const [suspendLoading, setSuspendLoading] = useState(false)
+  const [suspendError, setSuspendError] = useState('')
+
   // Billing exempt modal state
   const [showBillingExempt, setShowBillingExempt] = useState(false)
   const [billingExemptTarget, setBillingExemptTarget] = useState(false)
@@ -555,6 +562,45 @@ export default function CustomerDetailPage() {
       setReEnableError('Network error')
     } finally {
       setReEnableLoading(false)
+    }
+  }
+
+  function openSuspendModal() {
+    setSuspendReason('chargeback')
+    setSuspendNotes('')
+    setSuspendError('')
+    setShowSuspend(true)
+  }
+
+  function closeSuspendModal() {
+    setShowSuspend(false)
+    setSuspendReason('chargeback')
+    setSuspendNotes('')
+    setSuspendError('')
+  }
+
+  async function handleSuspend() {
+    setSuspendError('')
+    setSuspendLoading(true)
+    try {
+      const res = await fetch('/api/customers/suspend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId, reason: suspendReason, notes: suspendNotes }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setSuspendError(data.error); return }
+      setAccount((prev) => prev ? {
+        ...prev,
+        account_status: `suspended_${suspendReason}`,
+        suspended_at: new Date().toISOString(),
+        suspended_reason: suspendNotes || null,
+      } : prev)
+      closeSuspendModal()
+    } catch {
+      setSuspendError('Network error')
+    } finally {
+      setSuspendLoading(false)
     }
   }
 
@@ -874,6 +920,14 @@ export default function CustomerDetailPage() {
                   className="px-3 py-1.5 text-sm rounded border border-white/30 text-white bg-white/15 hover:bg-white/25 transition-colors"
                 >
                   Comp 1 Month
+                </button>
+              )}
+              {canEdit && account.account_status === 'active' && (
+                <button
+                  onClick={openSuspendModal}
+                  className="px-3 py-1.5 text-sm rounded border border-red-400/60 text-red-100 bg-red-600/40 hover:bg-red-600/60 transition-colors"
+                >
+                  Suspend Account
                 </button>
               )}
             </div>
@@ -1815,6 +1869,59 @@ export default function CustomerDetailPage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Suspend Account Modal */}
+      {showSuspend && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={closeSuspendModal}>
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-red-700 mb-2">Suspend Account</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Suspend <strong>{account.team_name}</strong>. All team members will immediately lose access.
+            </p>
+            {suspendError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mb-3">{suspendError}</div>
+            )}
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reason (required)</label>
+                <select
+                  value={suspendReason}
+                  onChange={(e) => setSuspendReason(e.target.value)}
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  <option value="chargeback">Chargeback</option>
+                  <option value="fraud">Fraud</option>
+                  <option value="abuse">Abuse</option>
+                  <option value="non_payment">Non-Payment</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+                <textarea
+                  value={suspendNotes}
+                  onChange={(e) => setSuspendNotes(e.target.value)}
+                  rows={3}
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="Additional context or details..."
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={closeSuspendModal} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                Cancel
+              </button>
+              <button
+                onClick={handleSuspend}
+                disabled={suspendLoading}
+                className="px-4 py-2 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {suspendLoading ? 'Suspending...' : 'Suspend Account'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -69,6 +69,7 @@ export const STATUS_COLORS: Record<string, string> = {
   past_due: 'bg-red-100 text-red-800',
   pending_cancellation: 'bg-yellow-100 text-yellow-800',
   cancelled: 'bg-gray-100 text-gray-600',
+  suspended: 'bg-red-100 text-red-800',
 }
 
 export const STATUS_LABELS: Record<string, string> = {
@@ -77,6 +78,7 @@ export const STATUS_LABELS: Record<string, string> = {
   past_due: 'Past Due',
   pending_cancellation: 'Pending Cancel',
   cancelled: 'Cancelled',
+  suspended: 'Suspended',
 }
 
 // ---------------------------------------------------------------------------

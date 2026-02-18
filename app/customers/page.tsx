@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { TIER_LABELS, PLAN_TIERS, STATUS_COLORS, STATUS_LABELS } from '@/lib/constants'
+import { AdminNav } from '@/app/components/AdminNav'
 
 interface Customer {
   id: string
@@ -178,15 +179,7 @@ function CustomersContent() {
         </div>
       </header>
 
-      <nav className="bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 flex gap-6 text-sm">
-          <a href="/dashboard" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Dashboard</a>
-          <a href="/customers" className="py-2.5 border-b-2 border-[#0D7377] text-[#0D7377] font-medium">Customers</a>
-          <a href="/alerts" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Alerts</a>
-          <a href="/errors" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Errors</a>
-          <a href="/audit" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Audit Log</a>
-        </div>
-      </nav>
+      <AdminNav active="customers" role={admin?.role ?? null} />
 
       <main className="max-w-7xl mx-auto px-4 py-6">
         {/* Success message */}
