@@ -73,21 +73,20 @@ interface ActivityEntry {
   user: { id: string; first_name: string; last_name: string; email: string } | null
 }
 
-interface BouncedEmail {
+interface SentEmail {
   id: string
   template_key: string
   recipient: string
   subject: string
   sent_at: string
-  resend_id: string
+  status: string
+  resend_id: string | null
 }
 
-interface BounceSummary {
-  bounced_count: number
-  total_sent: number
+interface EmailSummary {
+  total: number
+  by_status: Record<string, number>
   bounce_rate: number
-  by_template: Record<string, number>
-  problematic_emails: { email: string; count: number }[]
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -95,6 +94,14 @@ const ROLE_LABELS: Record<string, string> = {
   team_leader: 'Team Leader',
   team_admin: 'Team Admin',
   agent: 'Agent',
+}
+
+const EMAIL_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  delivered: { bg: 'bg-green-100', text: 'text-green-700' },
+  opened:    { bg: 'bg-blue-100',  text: 'text-blue-700' },
+  clicked:   { bg: 'bg-purple-100', text: 'text-purple-700' },
+  bounced:   { bg: 'bg-red-100',   text: 'text-red-700' },
+  sent:      { bg: 'bg-gray-100',  text: 'text-gray-600' },
 }
 
 function formatDate(d: string | null): string {
@@ -125,19 +132,15 @@ function usageBg(percent: number): string {
 }
 
 function getTemplateBadgeStyle(templateKey: string): { bg: string; text: string; label: string } {
-  // Critical security emails - RED
   if (['password_reset', 'email_verification_resend', 'admin_invitation', 'team_invite'].includes(templateKey)) {
     return { bg: 'bg-red-100', text: 'text-red-700', label: 'Security' }
   }
-  // Billing/trial emails - YELLOW
   if (['payment_failed', 'trial_expiring', 'trial_expired', 'payment_first', 'payment_recurring'].includes(templateKey)) {
     return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Billing' }
   }
-  // Team coordination - BLUE
   if (['team_member_joined', 'team_member_removed_member', 'team_member_removed_leader'].includes(templateKey)) {
     return { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Team' }
   }
-  // Default - GRAY
   return { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Other' }
 }
 
@@ -176,8 +179,9 @@ export default function CustomerDetailPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [activity, setActivity] = useState<ActivityEntry[]>([])
-  const [bouncedEmails, setBouncedEmails] = useState<BouncedEmail[]>([])
-  const [bounceSummary, setBounceSummary] = useState<BounceSummary | null>(null)
+  const [emailHistory, setEmailHistory] = useState<SentEmail[]>([])
+  const [emailSummary, setEmailSummary] = useState<EmailSummary | null>(null)
+  const [emailStatusFilter, setEmailStatusFilter] = useState<string>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -185,7 +189,7 @@ export default function CustomerDetailPage() {
   const [adminRole, setAdminRole] = useState<string | null>(null)
   const [adminInfo, setAdminInfo] = useState<{ first_name: string; last_name: string; role: string } | null>(null)
 
-  // Modal state
+  // Modal state — extend trial / comp month
   const [showExtendTrial, setShowExtendTrial] = useState(false)
   const [showCompMonth, setShowCompMonth] = useState(false)
   const [modalDays, setModalDays] = useState('7')
@@ -220,12 +224,35 @@ export default function CustomerDetailPage() {
   const [reEnableError, setReEnableError] = useState('')
   const [reEnableSuccess, setReEnableSuccess] = useState('')
 
+  // Billing exempt modal state
+  const [showBillingExempt, setShowBillingExempt] = useState(false)
+  const [billingExemptTarget, setBillingExemptTarget] = useState(false)
+  const [billingExemptReason, setBillingExemptReason] = useState('')
+  const [billingExemptLoading, setBillingExemptLoading] = useState(false)
+  const [billingExemptError, setBillingExemptError] = useState('')
+
+  // Deactivate member modal state
+  const [showDeactivateMember, setShowDeactivateMember] = useState(false)
+  const [deactivateMemberId, setDeactivateMemberId] = useState('')
+  const [deactivateMemberName, setDeactivateMemberName] = useState('')
+  const [deactivateMemberReason, setDeactivateMemberReason] = useState('')
+  const [deactivateMemberLoading, setDeactivateMemberLoading] = useState(false)
+  const [deactivateMemberError, setDeactivateMemberError] = useState('')
+
+  // Cancel invitation modal state
+  const [showCancelInvitation, setShowCancelInvitation] = useState(false)
+  const [cancelInvitationId, setCancelInvitationId] = useState('')
+  const [cancelInvitationEmail, setCancelInvitationEmail] = useState('')
+  const [cancelInvitationReason, setCancelInvitationReason] = useState('')
+  const [cancelInvitationLoading, setCancelInvitationLoading] = useState(false)
+  const [cancelInvitationError, setCancelInvitationError] = useState('')
+
   useEffect(() => {
     async function load() {
       try {
-        const [detailRes, bouncesRes] = await Promise.all([
+        const [detailRes, emailsRes] = await Promise.all([
           fetch(`/api/customers/detail?id=${teamId}`, { cache: 'no-store' }),
-          fetch(`/api/customers/bounced-emails?team_id=${teamId}`, { cache: 'no-store' }),
+          fetch(`/api/customers/emails?team_id=${teamId}`, { cache: 'no-store' }),
         ])
 
         if (!detailRes.ok) {
@@ -241,11 +268,10 @@ export default function CustomerDetailPage() {
         setInvitations(data.invitations)
         setActivity(data.recent_activity)
 
-        // Load bounced emails (non-critical, don't fail if it errors)
-        if (bouncesRes.ok) {
-          const bouncesData = await bouncesRes.json()
-          setBouncedEmails(bouncesData.bounces)
-          setBounceSummary(bouncesData.summary)
+        if (emailsRes.ok) {
+          const emailsData = await emailsRes.json()
+          setEmailHistory(emailsData.emails)
+          setEmailSummary(emailsData.summary)
         }
       } catch {
         setError('Failed to load customer details')
@@ -256,7 +282,6 @@ export default function CustomerDetailPage() {
     load()
   }, [teamId, router])
 
-  // Fetch admin role for permission checks
   useEffect(() => {
     async function fetchAdminRole() {
       try {
@@ -375,7 +400,6 @@ export default function CustomerDetailPage() {
       const data = await res.json()
       if (!res.ok) { setEditError(data.error); return }
       setEditSuccess('Customer updated successfully')
-      // Update local state
       setAccount((prev) => prev ? {
         ...prev,
         team_name: data.team_name,
@@ -417,7 +441,6 @@ export default function CustomerDetailPage() {
       })
       const data = await res.json()
       if (!res.ok) { setDeleteError(data.error); return }
-      // Hard redirect to customers list to avoid stale cache
       window.location.href = '/customers?deleted=1'
     } catch {
       setDeleteError('Network error')
@@ -448,15 +471,11 @@ export default function CustomerDetailPage() {
       const res = await fetch('/api/customers/re-enable', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          teamId,
-          reason: reEnableReason,
-        }),
+        body: JSON.stringify({ teamId, reason: reEnableReason }),
       })
       const data = await res.json()
       if (!res.ok) { setReEnableError(data.error); return }
       setReEnableSuccess('Account re-enabled successfully')
-      // Update local state
       setAccount((prev) => prev ? {
         ...prev,
         account_status: 'active',
@@ -468,6 +487,116 @@ export default function CustomerDetailPage() {
       setReEnableLoading(false)
     }
   }
+
+  function openBillingExemptModal(targetValue: boolean) {
+    setBillingExemptTarget(targetValue)
+    setBillingExemptReason('')
+    setBillingExemptError('')
+    setShowBillingExempt(true)
+  }
+
+  function closeBillingExemptModal() {
+    setShowBillingExempt(false)
+    setBillingExemptReason('')
+    setBillingExemptError('')
+  }
+
+  async function handleBillingExemptToggle() {
+    setBillingExemptError('')
+    setBillingExemptLoading(true)
+    try {
+      const res = await fetch('/api/customers/toggle-billing-exempt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId, billingExempt: billingExemptTarget, reason: billingExemptReason }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setBillingExemptError(data.error); return }
+      setAccount((prev) => prev ? { ...prev, billing_exempt: billingExemptTarget } : prev)
+      closeBillingExemptModal()
+    } catch {
+      setBillingExemptError('Network error')
+    } finally {
+      setBillingExemptLoading(false)
+    }
+  }
+
+  function openDeactivateMemberModal(member: Member) {
+    setDeactivateMemberId(member.id)
+    setDeactivateMemberName([member.first_name, member.last_name].filter(Boolean).join(' '))
+    setDeactivateMemberReason('')
+    setDeactivateMemberError('')
+    setShowDeactivateMember(true)
+  }
+
+  function closeDeactivateMemberModal() {
+    setShowDeactivateMember(false)
+    setDeactivateMemberId('')
+    setDeactivateMemberName('')
+    setDeactivateMemberReason('')
+    setDeactivateMemberError('')
+  }
+
+  async function handleDeactivateMember() {
+    setDeactivateMemberError('')
+    setDeactivateMemberLoading(true)
+    try {
+      const res = await fetch('/api/customers/deactivate-member', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId, userId: deactivateMemberId, reason: deactivateMemberReason }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setDeactivateMemberError(data.error); return }
+      setMembers((prev) => prev.map((m) => m.id === deactivateMemberId ? { ...m, is_active: false } : m))
+      closeDeactivateMemberModal()
+    } catch {
+      setDeactivateMemberError('Network error')
+    } finally {
+      setDeactivateMemberLoading(false)
+    }
+  }
+
+  function openCancelInvitationModal(inv: Invitation) {
+    setCancelInvitationId(inv.id)
+    setCancelInvitationEmail(inv.email)
+    setCancelInvitationReason('')
+    setCancelInvitationError('')
+    setShowCancelInvitation(true)
+  }
+
+  function closeCancelInvitationModal() {
+    setShowCancelInvitation(false)
+    setCancelInvitationId('')
+    setCancelInvitationEmail('')
+    setCancelInvitationReason('')
+    setCancelInvitationError('')
+  }
+
+  async function handleCancelInvitation() {
+    setCancelInvitationError('')
+    setCancelInvitationLoading(true)
+    try {
+      const res = await fetch('/api/customers/cancel-invitation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId, invitationId: cancelInvitationId, reason: cancelInvitationReason }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setCancelInvitationError(data.error); return }
+      setInvitations((prev) => prev.filter((inv) => inv.id !== cancelInvitationId))
+      closeCancelInvitationModal()
+    } catch {
+      setCancelInvitationError('Network error')
+    } finally {
+      setCancelInvitationLoading(false)
+    }
+  }
+
+  // Email history filtered view (client-side filter on the already-fetched data)
+  const filteredEmails = emailStatusFilter === 'all'
+    ? emailHistory
+    : emailHistory.filter((e) => e.status === emailStatusFilter)
 
   const canEdit = adminRole === 'super_admin' || adminRole === 'support_l2'
   const canDelete = adminRole === 'super_admin'
@@ -510,9 +639,12 @@ export default function CustomerDetailPage() {
             {adminInfo && (
               <div className="flex items-center gap-4">
                 <span className="text-sm text-white/80">
-                  {[adminInfo.first_name, adminInfo.last_name].filter(Boolean).join(' ')} <span className="text-white/60">({ROLE_LABELS[adminInfo.role] || adminInfo.role})</span>
+                  {[adminInfo.first_name, adminInfo.last_name].filter(Boolean).join(' ')}{' '}
+                  <span className="text-white/60">({ROLE_LABELS[adminInfo.role] || adminInfo.role})</span>
                 </span>
-                <button onClick={handleLogout} className="text-sm text-white/70 hover:text-white transition-colors">Sign out</button>
+                <button onClick={handleLogout} className="text-sm text-white/70 hover:text-white transition-colors">
+                  Sign out
+                </button>
               </div>
             )}
           </div>
@@ -612,8 +744,23 @@ export default function CustomerDetailPage() {
               <p className="text-gray-500">Plan</p>
               <p className="font-medium">
                 {TIER_LABELS[account.plan_tier] || account.plan_tier}
-                {account.billing_exempt && <span className="ml-1 text-xs text-purple-600">(exempt)</span>}
               </p>
+            </div>
+            <div>
+              <p className="text-gray-500">Billing Exempt</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className={`font-medium ${account.billing_exempt ? 'text-purple-700' : 'text-gray-600'}`}>
+                  {account.billing_exempt ? 'Yes' : 'No'}
+                </span>
+                {canEdit && (
+                  <button
+                    onClick={() => openBillingExemptModal(!account.billing_exempt)}
+                    className="text-xs text-blue-600 hover:text-blue-800 underline"
+                  >
+                    {account.billing_exempt ? 'Remove' : 'Set'}
+                  </button>
+                )}
+              </div>
             </div>
             <div>
               <p className="text-gray-500">Signup Date</p>
@@ -676,7 +823,6 @@ export default function CustomerDetailPage() {
               <p className="text-sm text-gray-500">Active Installations ({usage.usage_percent}%)</p>
             </div>
           </div>
-          {/* Usage bar */}
           <div className="w-full bg-gray-100 rounded-full h-2 mb-4">
             <div
               className={`h-2 rounded-full transition-all ${usageBg(usage.usage_percent)}`}
@@ -715,6 +861,7 @@ export default function CustomerDetailPage() {
                 <th className="px-5 py-2 font-medium text-gray-600">Role</th>
                 <th className="px-5 py-2 font-medium text-gray-600">Last Login</th>
                 <th className="px-5 py-2 font-medium text-gray-600">Status</th>
+                {canEdit && <th className="px-5 py-2 font-medium text-gray-600">Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -731,6 +878,20 @@ export default function CustomerDetailPage() {
                       <span className="text-gray-400 text-xs font-medium">Inactive</span>
                     )}
                   </td>
+                  {canEdit && (
+                    <td className="px-5 py-2.5">
+                      {m.is_active && m.role !== 'team_leader' && m.role !== 'solo_agent' ? (
+                        <button
+                          onClick={() => openDeactivateMemberModal(m)}
+                          className="text-xs text-red-600 hover:text-red-800 font-medium"
+                        >
+                          Deactivate
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
               {invitations.map((inv) => (
@@ -741,101 +902,127 @@ export default function CustomerDetailPage() {
                   <td className="px-5 py-2.5 text-gray-400">—</td>
                   <td className="px-5 py-2.5">
                     <span className="text-yellow-600 text-xs font-medium bg-yellow-100 px-1.5 py-0.5 rounded">
-                      Pending
+                      Pending · expires {formatDate(inv.expires_at)}
                     </span>
                   </td>
+                  {canEdit && (
+                    <td className="px-5 py-2.5">
+                      <button
+                        onClick={() => openCancelInvitationModal(inv)}
+                        className="text-xs text-red-600 hover:text-red-800 font-medium"
+                      >
+                        Cancel
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        {/* Section D: Email Delivery History */}
-        {bounceSummary && bounceSummary.bounced_count > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-                Email Delivery History
-              </h2>
-            </div>
-
-            {/* Summary Stats */}
-            <div className="px-5 py-4 bg-orange-50 border-b border-orange-100">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-2xl">⚠️</span>
-                <p className="text-sm font-medium text-orange-800">
-                  {bounceSummary.bounced_count} email{bounceSummary.bounced_count !== 1 ? 's' : ''} bounced in last 30 days
-                  <span className="ml-2 text-orange-600">
-                    ({bounceSummary.bounce_rate}% bounce rate)
-                  </span>
-                </p>
-              </div>
-              {bounceSummary.problematic_emails.length > 0 && (
-                <p className="text-xs text-orange-700 mt-2">
-                  <strong>Pattern detected:</strong>{' '}
-                  {bounceSummary.problematic_emails.map(pe => `${pe.email} (${pe.count} bounces)`).join(', ')}
-                </p>
+        {/* Section D: Email History */}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+              Email History
+              {emailSummary && (
+                <span className="ml-2 text-xs font-normal text-gray-400 normal-case">
+                  (last 90 days · {emailSummary.total} sent)
+                </span>
               )}
-            </div>
-
-            {/* Bounced Emails Table */}
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50 text-left">
-                  <th className="px-5 py-2 font-medium text-gray-600">Type</th>
-                  <th className="px-5 py-2 font-medium text-gray-600">Recipient</th>
-                  <th className="px-5 py-2 font-medium text-gray-600">Subject</th>
-                  <th className="px-5 py-2 font-medium text-gray-600">Sent Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bouncedEmails.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-5 py-8 text-center text-gray-400 text-sm">
-                      No bounced emails in last 30 days
-                    </td>
-                  </tr>
-                ) : (
-                  bouncedEmails.map((bounce) => {
-                    const badgeStyle = getTemplateBadgeStyle(bounce.template_key)
-                    return (
-                      <tr key={bounce.id} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="px-5 py-2.5">
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${badgeStyle.bg} ${badgeStyle.text}`}>
-                              {badgeStyle.label}
-                            </span>
-                            <span className="text-gray-600 text-xs">
-                              {formatTemplateLabel(bounce.template_key)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-5 py-2.5 text-gray-700 font-medium">
-                          {bounce.recipient}
-                        </td>
-                        <td className="px-5 py-2.5 text-gray-600 max-w-xs truncate">
-                          {bounce.subject}
-                        </td>
-                        <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap">
-                          {formatDateTime(bounce.sent_at)}
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-
-            {/* Show count if truncated */}
-            {bouncedEmails.length >= 50 && (
-              <div className="px-5 py-3 border-t border-gray-100 bg-gray-50">
-                <p className="text-xs text-gray-500 text-center">
-                  Showing 50 most recent bounces. Total: {bounceSummary.bounced_count}
-                </p>
+            </h2>
+            {/* Status filter tabs */}
+            {emailSummary && (
+              <div className="flex items-center gap-1">
+                {(['all', 'bounced', 'delivered', 'opened', 'sent'] as const).map((s) => {
+                  const count = s === 'all' ? emailSummary.total : (emailSummary.by_status[s] || 0)
+                  const isActive = emailStatusFilter === s
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => setEmailStatusFilter(s)}
+                      className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
+                        isActive
+                          ? 'bg-[#0D7377] text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+                      {count > 0 && <span className="ml-1 opacity-75">({count})</span>}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
-        )}
+
+          {/* Bounce alert bar */}
+          {emailSummary && emailSummary.by_status.bounced > 0 && (
+            <div className="px-5 py-3 bg-orange-50 border-b border-orange-100 flex items-center gap-2">
+              <span className="text-orange-500 text-sm">⚠</span>
+              <p className="text-sm text-orange-800">
+                <strong>{emailSummary.by_status.bounced} bounce{emailSummary.by_status.bounced !== 1 ? 's' : ''}</strong>
+                {' '}in last 90 days
+                <span className="ml-2 text-orange-600">({emailSummary.bounce_rate}% bounce rate)</span>
+              </p>
+            </div>
+          )}
+
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50 text-left">
+                <th className="px-5 py-2 font-medium text-gray-600">Status</th>
+                <th className="px-5 py-2 font-medium text-gray-600">Type</th>
+                <th className="px-5 py-2 font-medium text-gray-600">Recipient</th>
+                <th className="px-5 py-2 font-medium text-gray-600">Subject</th>
+                <th className="px-5 py-2 font-medium text-gray-600">Sent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredEmails.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-8 text-center text-gray-400 text-sm">
+                    {emailSummary?.total === 0 ? 'No emails sent in last 90 days.' : `No ${emailStatusFilter} emails in last 90 days.`}
+                  </td>
+                </tr>
+              ) : (
+                filteredEmails.map((email) => {
+                  const statusStyle = EMAIL_STATUS_COLORS[email.status] || EMAIL_STATUS_COLORS.sent
+                  const badgeStyle = getTemplateBadgeStyle(email.template_key)
+                  return (
+                    <tr key={email.id} className={`border-b border-gray-50 hover:bg-gray-50 ${email.status === 'bounced' ? 'bg-red-50/30' : ''}`}>
+                      <td className="px-5 py-2.5">
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
+                          {email.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${badgeStyle.bg} ${badgeStyle.text}`}>
+                            {badgeStyle.label}
+                          </span>
+                          <span className="text-gray-500 text-xs">{formatTemplateLabel(email.template_key)}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-2.5 text-gray-700">{email.recipient}</td>
+                      <td className="px-5 py-2.5 text-gray-600 max-w-xs truncate">{email.subject}</td>
+                      <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap">{formatDateTime(email.sent_at)}</td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+
+          {filteredEmails.length >= 100 && (
+            <div className="px-5 py-3 border-t border-gray-100 bg-gray-50">
+              <p className="text-xs text-gray-500 text-center">
+                Showing 100 most recent. Total in range: {emailSummary?.total}
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* Section E: Recent Activity */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -1223,6 +1410,122 @@ export default function CustomerDetailPage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Billing Exempt Modal */}
+      {showBillingExempt && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={closeBillingExemptModal}>
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              {billingExemptTarget ? 'Set Billing Exempt' : 'Remove Billing Exempt'}
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {billingExemptTarget
+                ? `Mark ${account.team_name} as billing exempt. They will not be charged for their subscription.`
+                : `Remove billing exemption for ${account.team_name}. Normal billing will apply.`}
+            </p>
+            {billingExemptError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mb-3">{billingExemptError}</div>
+            )}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Reason (required)</label>
+              <textarea
+                value={billingExemptReason}
+                onChange={(e) => setBillingExemptReason(e.target.value)}
+                rows={2}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Why is billing exempt being changed?"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={closeBillingExemptModal} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                Cancel
+              </button>
+              <button
+                onClick={handleBillingExemptToggle}
+                disabled={billingExemptLoading || billingExemptReason.trim().length < 3}
+                className="px-4 py-2 text-sm rounded bg-[#0D7377] text-white hover:bg-[#0B6163] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {billingExemptLoading ? 'Saving...' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivate Member Modal */}
+      {showDeactivateMember && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={closeDeactivateMemberModal}>
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Deactivate Team Member</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Deactivate <strong>{deactivateMemberName}</strong>. They will lose access to the team account.
+            </p>
+            {deactivateMemberError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mb-3">{deactivateMemberError}</div>
+            )}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Reason (required)</label>
+              <textarea
+                value={deactivateMemberReason}
+                onChange={(e) => setDeactivateMemberReason(e.target.value)}
+                rows={2}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                placeholder="Why is this member being deactivated?"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={closeDeactivateMemberModal} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                Cancel
+              </button>
+              <button
+                onClick={handleDeactivateMember}
+                disabled={deactivateMemberLoading || deactivateMemberReason.trim().length < 3}
+                className="px-4 py-2 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deactivateMemberLoading ? 'Deactivating...' : 'Deactivate Member'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Invitation Modal */}
+      {showCancelInvitation && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={closeCancelInvitationModal}>
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Cancel Invitation</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Cancel the pending invitation for <strong>{cancelInvitationEmail}</strong>.
+              They will no longer be able to accept this invite.
+            </p>
+            {cancelInvitationError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mb-3">{cancelInvitationError}</div>
+            )}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Reason (required)</label>
+              <textarea
+                value={cancelInvitationReason}
+                onChange={(e) => setCancelInvitationReason(e.target.value)}
+                rows={2}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                placeholder="Why is this invitation being cancelled?"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={closeCancelInvitationModal} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                Keep Invitation
+              </button>
+              <button
+                onClick={handleCancelInvitation}
+                disabled={cancelInvitationLoading || cancelInvitationReason.trim().length < 3}
+                className="px-4 py-2 text-sm rounded bg-gray-700 text-white hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {cancelInvitationLoading ? 'Cancelling...' : 'Cancel Invitation'}
+              </button>
+            </div>
           </div>
         </div>
       )}
