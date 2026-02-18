@@ -116,7 +116,9 @@ export async function GET(req: NextRequest) {
       out_of_service: lockboxStatuses.filter((l) => l.status === 'out_of_service').length,
     }
 
-    const planLimit = LOCKBOX_LIMITS[team.plan_tier] || 25
+    // Solo agents on free trial get solo-tier limits (10 lockboxes), not team trial limits (25)
+    const isSoloOnTrial = team.plan_tier === 'free_trial' && leader?.role === 'solo_agent'
+    const planLimit = isSoloOnTrial ? 10 : (LOCKBOX_LIMITS[team.plan_tier] || 25)
 
     return NextResponse.json({
       account: {
