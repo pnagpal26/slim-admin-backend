@@ -63,16 +63,6 @@ interface Invitation {
   expires_at: string
 }
 
-interface ActivityEntry {
-  id: string
-  action: string
-  performed_at: string
-  action_method: string | null
-  details: Record<string, unknown> | null
-  lockbox_id: string | null
-  user: { id: string; first_name: string; last_name: string; email: string } | null
-}
-
 interface AssignedUser {
   id: string
   first_name: string
@@ -114,6 +104,17 @@ interface EmailSummary {
   total: number
   by_status: Record<string, number>
   bounce_rate: number
+}
+
+interface TimelineEvent {
+  id: string
+  type: 'lockbox_action' | 'email_sent' | 'admin_action'
+  timestamp: string
+  title: string
+  subtitle: string | null
+  actor: { name: string; email: string; role: 'customer' | 'admin' } | null
+  badge: string | null
+  metadata: Record<string, unknown>
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -198,12 +199,6 @@ function formatTemplateLabel(templateKey: string): string {
   return labels[templateKey] || templateKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
 }
 
-function formatAction(action: string): string {
-  return action
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
-}
 
 export default function CustomerDetailPage() {
   const router = useRouter()
@@ -214,13 +209,17 @@ export default function CustomerDetailPage() {
   const [usage, setUsage] = useState<Usage | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
-  const [activity, setActivity] = useState<ActivityEntry[]>([])
   const [lockboxes, setLockboxes] = useState<Lockbox[]>([])
   const [lockboxSummary, setLockboxSummary] = useState<LockboxSummary | null>(null)
   const [lockboxStatusFilter, setLockboxStatusFilter] = useState<string>('all')
   const [emailHistory, setEmailHistory] = useState<SentEmail[]>([])
   const [emailSummary, setEmailSummary] = useState<EmailSummary | null>(null)
   const [emailStatusFilter, setEmailStatusFilter] = useState<string>('all')
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([])
+  const [timelineHasMore, setTimelineHasMore] = useState(false)
+  const [timelineLoadingMore, setTimelineLoadingMore] = useState(false)
+  const [timelinePage, setTimelinePage] = useState(0)
+  const [timelineTotal, setTimelineTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -304,10 +303,11 @@ export default function CustomerDetailPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [detailRes, emailsRes, lockboxesRes] = await Promise.all([
+        const [detailRes, emailsRes, lockboxesRes, timelineRes] = await Promise.all([
           fetch(`/api/customers/detail?id=${teamId}`, { cache: 'no-store' }),
           fetch(`/api/customers/emails?team_id=${teamId}`, { cache: 'no-store' }),
           fetch(`/api/customers/lockboxes?team_id=${teamId}`, { cache: 'no-store' }),
+          fetch(`/api/customers/timeline?team_id=${teamId}&page=0`, { cache: 'no-store' }),
         ])
 
         if (!detailRes.ok) {
@@ -321,7 +321,6 @@ export default function CustomerDetailPage() {
         setUsage(data.usage)
         setMembers(data.members)
         setInvitations(data.invitations)
-        setActivity(data.recent_activity)
 
         if (emailsRes.ok) {
           const emailsData = await emailsRes.json()
@@ -333,6 +332,14 @@ export default function CustomerDetailPage() {
           const lockboxesData = await lockboxesRes.json()
           setLockboxes(lockboxesData.lockboxes)
           setLockboxSummary(lockboxesData.summary)
+        }
+
+        if (timelineRes.ok) {
+          const tData = await timelineRes.json()
+          setTimeline(tData.events)
+          setTimelineHasMore(tData.has_more)
+          setTimelinePage(0)
+          setTimelineTotal(tData.total)
         }
       } catch {
         setError('Failed to load customer details')
@@ -721,6 +728,25 @@ export default function CustomerDetailPage() {
       setCancelInvitationError('Network error')
     } finally {
       setCancelInvitationLoading(false)
+    }
+  }
+
+  async function loadMoreTimeline() {
+    if (timelineLoadingMore || !timelineHasMore) return
+    setTimelineLoadingMore(true)
+    try {
+      const nextPage = timelinePage + 1
+      const res = await fetch(`/api/customers/timeline?team_id=${teamId}&page=${nextPage}`, { cache: 'no-store' })
+      if (res.ok) {
+        const data = await res.json()
+        setTimeline((prev) => [...prev, ...data.events])
+        setTimelineHasMore(data.has_more)
+        setTimelinePage(nextPage)
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setTimelineLoadingMore(false)
     }
   }
 
@@ -1268,49 +1294,90 @@ export default function CustomerDetailPage() {
           )}
         </div>
 
-        {/* Section E: Recent Activity */}
+        {/* Section E: Activity Timeline */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-              Recent Activity
+              Activity Timeline
+              {timelineTotal > 0 && (
+                <span className="ml-2 text-xs font-normal text-gray-400 normal-case">
+                  ({timelineTotal} events)
+                </span>
+              )}
             </h2>
-            {activity.length > 0 && (
-              <span className="text-xs text-gray-400">Last 20 entries</span>
-            )}
+            <div className="flex items-center gap-3 text-xs text-gray-400">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />Lockbox</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400 inline-block" />Email</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />Admin</span>
+            </div>
           </div>
-          {activity.length === 0 ? (
+
+          {timeline.length === 0 ? (
             <div className="px-5 py-8 text-center text-gray-400 text-sm">No activity recorded.</div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50 text-left">
-                  <th className="px-5 py-2 font-medium text-gray-600">Timestamp</th>
-                  <th className="px-5 py-2 font-medium text-gray-600">User</th>
-                  <th className="px-5 py-2 font-medium text-gray-600">Action</th>
-                  <th className="px-5 py-2 font-medium text-gray-600">Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activity.map((a) => (
-                  <tr key={a.id} className="border-b border-gray-50">
-                    <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap">
-                      {formatDateTime(a.performed_at)}
-                    </td>
-                    <td className="px-5 py-2.5 text-gray-600">
-                      {a.user ? [a.user.first_name, a.user.last_name].filter(Boolean).join(' ') : '—'}
-                    </td>
-                    <td className="px-5 py-2.5">
-                      <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-medium">
-                        {formatAction(a.action)}
-                      </span>
-                    </td>
-                    <td className="px-5 py-2.5 text-gray-500 text-xs max-w-xs truncate">
-                      {a.details ? JSON.stringify(a.details) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="px-5 py-4">
+              <div className="relative">
+                {/* Vertical line */}
+                <div className="absolute left-3.5 top-2 bottom-2 w-px bg-gray-200" />
+
+                <div className="space-y-0">
+                  {timeline.map((event) => {
+                    const isLockbox = event.type === 'lockbox_action'
+                    const isEmail = event.type === 'email_sent'
+                    const dotColor = isLockbox ? 'bg-blue-400' : isEmail ? 'bg-purple-400' : 'bg-amber-400'
+                    const badgeBg = isLockbox ? 'bg-blue-50 text-blue-700' : isEmail ? 'bg-purple-50 text-purple-700' : 'bg-amber-50 text-amber-700'
+                    const typeLabel = isLockbox ? 'Lockbox' : isEmail ? 'Email' : 'Admin'
+
+                    return (
+                      <div key={event.id} className="relative flex gap-4 pb-4">
+                        {/* Dot */}
+                        <div className={`relative z-10 flex-shrink-0 w-7 h-7 rounded-full ${dotColor} flex items-center justify-center mt-0.5`}>
+                          {isLockbox && <span className="text-white text-xs">L</span>}
+                          {isEmail && <span className="text-white text-xs">E</span>}
+                          {!isLockbox && !isEmail && <span className="text-white text-xs">A</span>}
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0 bg-gray-50 rounded-lg px-3 py-2.5">
+                          <div className="flex items-start justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${badgeBg}`}>
+                                {typeLabel}
+                              </span>
+                              <span className="text-sm font-medium text-gray-800">{event.title}</span>
+                            </div>
+                            <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">
+                              {formatDateTime(event.timestamp)}
+                            </span>
+                          </div>
+                          {event.subtitle && (
+                            <p className="text-xs text-gray-500 mt-0.5">{event.subtitle}</p>
+                          )}
+                          {event.actor && (
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {event.actor.role === 'admin' ? 'By admin: ' : 'By: '}
+                              <span className="text-gray-500">{event.actor.name || event.actor.email}</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {timelineHasMore && (
+                <div className="mt-2 text-center">
+                  <button
+                    onClick={loadMoreTimeline}
+                    disabled={timelineLoadingMore}
+                    className="px-4 py-2 text-sm rounded border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    {timelineLoadingMore ? 'Loading...' : 'Load more'}
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
