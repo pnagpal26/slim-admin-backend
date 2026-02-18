@@ -90,7 +90,6 @@ interface Lockbox {
   closing_date: string | null
   installed_at: string | null
   removed_at: string | null
-  checked_out_at: string | null
   updated_at: string
   created_at: string
   assigned_to: AssignedUser | null
@@ -1002,7 +1001,7 @@ export default function CustomerDetailPage() {
                 ) : (
                   filteredLockboxes.map((lb) => {
                     const style = LOCKBOX_STATUS_COLORS[lb.status] || { bg: 'bg-gray-100', text: 'text-gray-600', label: lb.status }
-                    const lastActivity = lb.installed_at || lb.removed_at || lb.checked_out_at || lb.updated_at
+                    const lastActivity = lb.installed_at || lb.removed_at || lb.updated_at
                     return (
                       <tr key={lb.id} className="border-b border-gray-50 hover:bg-gray-50">
                         <td className="px-5 py-2.5 font-mono text-sm font-medium text-gray-800">

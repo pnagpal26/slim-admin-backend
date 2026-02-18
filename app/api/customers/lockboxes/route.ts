@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
       .from('lockboxes')
       .select(`
         id, lockbox_id, status, current_address, make_model, description,
-        closing_date, installed_at, removed_at, checked_out_at, updated_at, created_at,
+        closing_date, installed_at, removed_at, updated_at, created_at,
         assigned_to,
         users:assigned_to(id, first_name, last_name, email)
       `)
@@ -65,7 +65,6 @@ export async function GET(req: NextRequest) {
         closing_date: lb.closing_date || null,
         installed_at: lb.installed_at || null,
         removed_at: lb.removed_at || null,
-        checked_out_at: lb.checked_out_at || null,
         updated_at: lb.updated_at,
         created_at: lb.created_at,
         assigned_to: lb.users
