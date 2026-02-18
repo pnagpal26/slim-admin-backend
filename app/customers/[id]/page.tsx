@@ -270,6 +270,13 @@ export default function CustomerDetailPage() {
   const [billingExemptLoading, setBillingExemptLoading] = useState(false)
   const [billingExemptError, setBillingExemptError] = useState('')
 
+  // Change plan modal state
+  const [showChangePlan, setShowChangePlan] = useState(false)
+  const [changePlanValue, setChangePlanValue] = useState('')
+  const [changePlanReason, setChangePlanReason] = useState('')
+  const [changePlanLoading, setChangePlanLoading] = useState(false)
+  const [changePlanError, setChangePlanError] = useState('')
+
   // Deactivate member modal state
   const [showDeactivateMember, setShowDeactivateMember] = useState(false)
   const [deactivateMemberId, setDeactivateMemberId] = useState('')
@@ -575,6 +582,40 @@ export default function CustomerDetailPage() {
     }
   }
 
+  function openChangePlanModal() {
+    setChangePlanValue(account?.plan_tier || '')
+    setChangePlanReason('')
+    setChangePlanError('')
+    setShowChangePlan(true)
+  }
+
+  function closeChangePlanModal() {
+    setShowChangePlan(false)
+    setChangePlanValue('')
+    setChangePlanReason('')
+    setChangePlanError('')
+  }
+
+  async function handleChangePlan() {
+    setChangePlanError('')
+    setChangePlanLoading(true)
+    try {
+      const res = await fetch('/api/customers/change-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId, newPlan: changePlanValue, reason: changePlanReason }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setChangePlanError(data.error); return }
+      setAccount((prev) => prev ? { ...prev, plan_tier: changePlanValue } : prev)
+      closeChangePlanModal()
+    } catch {
+      setChangePlanError('Network error')
+    } finally {
+      setChangePlanLoading(false)
+    }
+  }
+
   function openDeactivateMemberModal(member: Member) {
     setDeactivateMemberId(member.id)
     setDeactivateMemberName([member.first_name, member.last_name].filter(Boolean).join(' '))
@@ -838,9 +879,17 @@ export default function CustomerDetailPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
               <p className="text-gray-500">Plan</p>
-              <p className="font-medium">
-                {TIER_LABELS[account.plan_tier] || account.plan_tier}
-              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="font-medium">{TIER_LABELS[account.plan_tier] || account.plan_tier}</span>
+                {canEdit && (
+                  <button
+                    onClick={openChangePlanModal}
+                    className="text-xs text-blue-600 hover:text-blue-800 underline"
+                  >
+                    Change
+                  </button>
+                )}
+              </div>
             </div>
             <div>
               <p className="text-gray-500">Billing Exempt</p>
@@ -1607,6 +1656,62 @@ export default function CustomerDetailPage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Change Plan Modal */}
+      {showChangePlan && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={closeChangePlanModal}>
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Change Plan</h3>
+            <div className="bg-amber-50 border border-amber-200 rounded p-3 mb-4">
+              <p className="text-xs text-amber-800">
+                <strong>Note:</strong> This updates the account&apos;s plan limits immediately but does <strong>not</strong> change Stripe billing.
+                Update the subscription in Stripe separately if needed.
+              </p>
+            </div>
+            {changePlanError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mb-3">{changePlanError}</div>
+            )}
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">New Plan</label>
+                <select
+                  value={changePlanValue}
+                  onChange={(e) => setChangePlanValue(e.target.value)}
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {Object.entries(TIER_LABELS).map(([value, label]) => (
+                    <option key={value} value={value} disabled={value === account?.plan_tier}>
+                      {label}{value === account?.plan_tier ? ' (current)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reason (required)</label>
+                <textarea
+                  value={changePlanReason}
+                  onChange={(e) => setChangePlanReason(e.target.value)}
+                  rows={2}
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Why is this plan being changed?"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={closeChangePlanModal} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                Cancel
+              </button>
+              <button
+                onClick={handleChangePlan}
+                disabled={changePlanLoading || changePlanValue === account?.plan_tier || changePlanReason.trim().length < 3}
+                className="px-4 py-2 text-sm rounded bg-[#0D7377] text-white hover:bg-[#0B6163] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {changePlanLoading ? 'Saving...' : 'Change Plan'}
+              </button>
+            </div>
           </div>
         </div>
       )}
