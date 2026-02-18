@@ -98,15 +98,17 @@ export async function GET(req: NextRequest) {
         status,
         member_count: team.users.filter((u) => u.is_active).length,
         bounce_count: bounceCountMap.get(team.id) || 0,
+        member_emails: team.users.map((u) => u.email.toLowerCase()),
       }
     })
 
-    // Apply search filter (team name or contact email)
+    // Apply search filter (team name, leader email, or any member email)
     if (search) {
       customers = customers.filter(
         (c) =>
           c.team_name.toLowerCase().includes(search) ||
-          c.contact_email.toLowerCase().includes(search)
+          c.contact_email.toLowerCase().includes(search) ||
+          c.member_emails.some((e) => e.includes(search))
       )
     }
 

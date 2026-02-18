@@ -239,6 +239,14 @@ export default function CustomerDetailPage() {
   const [deactivateMemberLoading, setDeactivateMemberLoading] = useState(false)
   const [deactivateMemberError, setDeactivateMemberError] = useState('')
 
+  // Reactivate member modal state
+  const [showReactivateMember, setShowReactivateMember] = useState(false)
+  const [reactivateMemberId, setReactivateMemberId] = useState('')
+  const [reactivateMemberName, setReactivateMemberName] = useState('')
+  const [reactivateMemberReason, setReactivateMemberReason] = useState('')
+  const [reactivateMemberLoading, setReactivateMemberLoading] = useState(false)
+  const [reactivateMemberError, setReactivateMemberError] = useState('')
+
   // Cancel invitation modal state
   const [showCancelInvitation, setShowCancelInvitation] = useState(false)
   const [cancelInvitationId, setCancelInvitationId] = useState('')
@@ -554,6 +562,42 @@ export default function CustomerDetailPage() {
       setDeactivateMemberError('Network error')
     } finally {
       setDeactivateMemberLoading(false)
+    }
+  }
+
+  function openReactivateMemberModal(member: Member) {
+    setReactivateMemberId(member.id)
+    setReactivateMemberName([member.first_name, member.last_name].filter(Boolean).join(' '))
+    setReactivateMemberReason('')
+    setReactivateMemberError('')
+    setShowReactivateMember(true)
+  }
+
+  function closeReactivateMemberModal() {
+    setShowReactivateMember(false)
+    setReactivateMemberId('')
+    setReactivateMemberName('')
+    setReactivateMemberReason('')
+    setReactivateMemberError('')
+  }
+
+  async function handleReactivateMember() {
+    setReactivateMemberError('')
+    setReactivateMemberLoading(true)
+    try {
+      const res = await fetch('/api/customers/reactivate-member', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId, userId: reactivateMemberId, reason: reactivateMemberReason }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setReactivateMemberError(data.error); return }
+      setMembers((prev) => prev.map((m) => m.id === reactivateMemberId ? { ...m, is_active: true } : m))
+      closeReactivateMemberModal()
+    } catch {
+      setReactivateMemberError('Network error')
+    } finally {
+      setReactivateMemberLoading(false)
     }
   }
 
@@ -880,13 +924,22 @@ export default function CustomerDetailPage() {
                   </td>
                   {canEdit && (
                     <td className="px-5 py-2.5">
-                      {m.is_active && m.role !== 'team_leader' && m.role !== 'solo_agent' ? (
-                        <button
-                          onClick={() => openDeactivateMemberModal(m)}
-                          className="text-xs text-red-600 hover:text-red-800 font-medium"
-                        >
-                          Deactivate
-                        </button>
+                      {m.role !== 'team_leader' && m.role !== 'solo_agent' ? (
+                        m.is_active ? (
+                          <button
+                            onClick={() => openDeactivateMemberModal(m)}
+                            className="text-xs text-red-600 hover:text-red-800 font-medium"
+                          >
+                            Deactivate
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => openReactivateMemberModal(m)}
+                            className="text-xs text-green-600 hover:text-green-800 font-medium"
+                          >
+                            Reactivate
+                          </button>
+                        )
                       ) : (
                         <span className="text-xs text-gray-300">—</span>
                       )}
@@ -935,7 +988,7 @@ export default function CustomerDetailPage() {
             {/* Status filter tabs */}
             {emailSummary && (
               <div className="flex items-center gap-1">
-                {(['all', 'bounced', 'delivered', 'opened', 'sent'] as const).map((s) => {
+                {(['all', 'sent', 'delivered', 'opened', 'clicked', 'bounced'] as const).map((s) => {
                   const count = s === 'all' ? emailSummary.total : (emailSummary.by_status[s] || 0)
                   const isActive = emailStatusFilter === s
                   return (
@@ -1486,6 +1539,43 @@ export default function CustomerDetailPage() {
                 className="px-4 py-2 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {deactivateMemberLoading ? 'Deactivating...' : 'Deactivate Member'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reactivate Member Modal */}
+      {showReactivateMember && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={closeReactivateMemberModal}>
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Reactivate Team Member</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Reactivate <strong>{reactivateMemberName}</strong>. They will regain access to the team account.
+            </p>
+            {reactivateMemberError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mb-3">{reactivateMemberError}</div>
+            )}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Reason (required)</label>
+              <textarea
+                value={reactivateMemberReason}
+                onChange={(e) => setReactivateMemberReason(e.target.value)}
+                rows={2}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Why is this member being reactivated?"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={closeReactivateMemberModal} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                Cancel
+              </button>
+              <button
+                onClick={handleReactivateMember}
+                disabled={reactivateMemberLoading || reactivateMemberReason.trim().length < 3}
+                className="px-4 py-2 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {reactivateMemberLoading ? 'Reactivating...' : 'Reactivate Member'}
               </button>
             </div>
           </div>
