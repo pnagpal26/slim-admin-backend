@@ -31,19 +31,40 @@ function normalizeLockboxAction(entry: Record<string, unknown>): TimelineEvent {
   const lockboxId = entry.lockbox_id_display as string | null
 
   const LOCKBOX_ACTION_LABELS: Record<string, string> = {
+    // Current action names written by the main app
+    created: 'Lockbox created',
+    moved: 'Lockbox status changed',
+    deleted: 'Lockbox deleted',
+    reassigned: 'Lockbox reassigned',
+    photo_uploaded: 'Photo uploaded',
+    photo_deleted: 'Photo deleted',
+    phone_verified: 'Phone verified',
+    phone_changed: 'Phone number changed',
+    member_removed: 'Team member removed',
+    invitation_resent: 'Invitation resent',
+    invitation_cancelled: 'Invitation cancelled',
+    // Status-based values that may appear as actions in older DB records
+    checked_out: 'Lockbox checked out',
+    installed: 'Lockbox installed',
+    available: 'Lockbox marked available',
+    removed: 'Lockbox removed',
+    in_transit: 'Lockbox in transit',
+    out_of_service: 'Lockbox out of service',
+    // Legacy action names
     create: 'Lockbox created',
     update: 'Lockbox updated',
     delete: 'Lockbox deleted',
     checkout: 'Lockbox checked out',
     install: 'Lockbox installed',
-    remove: 'Lockbox removed',
     status_change: 'Lockbox status changed',
     transfer: 'Lockbox transferred',
-    code_view: 'Lockbox code viewed',
-    code_change: 'Lockbox code changed',
+    code_view: 'Code viewed',
+    code_change: 'Code changed',
   }
 
-  const label = LOCKBOX_ACTION_LABELS[action] || `Lockbox: ${action}`
+  // Fallback: title-case the raw action rather than showing snake_case
+  const label = LOCKBOX_ACTION_LABELS[action]
+    ?? action.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
   const subtitle = lockboxId ? `Lockbox #${lockboxId}` : null
 
   return {
