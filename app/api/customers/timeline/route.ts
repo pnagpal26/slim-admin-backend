@@ -178,6 +178,9 @@ export async function GET(req: NextRequest) {
 
     const teamId = req.nextUrl.searchParams.get('team_id')
     const page = parseInt(req.nextUrl.searchParams.get('page') || '0', 10)
+    // Default to last 30 days if no since param provided
+    const sinceParam = req.nextUrl.searchParams.get('since')
+    const since = sinceParam || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
     if (!teamId) {
       return NextResponse.json({ error: 'team_id is required' }, { status: 400 })
@@ -206,6 +209,7 @@ export async function GET(req: NextRequest) {
               users:performed_by(id, first_name, last_name, email)
             `)
             .in('lockbox_id', lockboxUuids)
+            .gte('performed_at', since)
             .order('performed_at', { ascending: false })
             .limit(FETCH_LIMIT)
         : Promise.resolve({ data: [], error: null }),
@@ -215,6 +219,7 @@ export async function GET(req: NextRequest) {
         .from('sent_emails')
         .select('id, template_key, recipient, subject, sent_at, status, resend_id')
         .eq('team_id', teamId)
+        .gte('sent_at', since)
         .order('sent_at', { ascending: false })
         .limit(FETCH_LIMIT),
 
@@ -226,6 +231,7 @@ export async function GET(req: NextRequest) {
           admin_users:admin_user_id(id, first_name, last_name, email)
         `)
         .eq('target_team_id', teamId)
+        .gte('performed_at', since)
         .order('performed_at', { ascending: false })
         .limit(FETCH_LIMIT),
     ])

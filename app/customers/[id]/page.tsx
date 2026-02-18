@@ -220,6 +220,8 @@ export default function CustomerDetailPage() {
   const [timelineLoadingMore, setTimelineLoadingMore] = useState(false)
   const [timelinePage, setTimelinePage] = useState(0)
   const [timelineTotal, setTimelineTotal] = useState(0)
+  const [timelineDateRange, setTimelineDateRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d')
+  const [timelineTypeFilter, setTimelineTypeFilter] = useState<'all' | 'lockbox_action' | 'email_sent' | 'admin_action'>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -731,12 +733,46 @@ export default function CustomerDetailPage() {
     }
   }
 
+  function timelineSinceParam(range: '7d' | '30d' | '90d' | 'all'): string {
+    if (range === 'all') return ''
+    const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
+    return `&since=${encodeURIComponent(new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString())}`
+  }
+
+  async function handleDateRangeChange(range: '7d' | '30d' | '90d' | 'all') {
+    setTimelineDateRange(range)
+    setTimelineTypeFilter('all')
+    setTimeline([])
+    setTimelinePage(0)
+    setTimelineHasMore(false)
+    setTimelineLoadingMore(true)
+    try {
+      const res = await fetch(
+        `/api/customers/timeline?team_id=${teamId}&page=0${timelineSinceParam(range)}`,
+        { cache: 'no-store' }
+      )
+      if (res.ok) {
+        const data = await res.json()
+        setTimeline(data.events)
+        setTimelineHasMore(data.has_more)
+        setTimelineTotal(data.total)
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setTimelineLoadingMore(false)
+    }
+  }
+
   async function loadMoreTimeline() {
     if (timelineLoadingMore || !timelineHasMore) return
     setTimelineLoadingMore(true)
     try {
       const nextPage = timelinePage + 1
-      const res = await fetch(`/api/customers/timeline?team_id=${teamId}&page=${nextPage}`, { cache: 'no-store' })
+      const res = await fetch(
+        `/api/customers/timeline?team_id=${teamId}&page=${nextPage}${timelineSinceParam(timelineDateRange)}`,
+        { cache: 'no-store' }
+      )
       if (res.ok) {
         const data = await res.json()
         setTimeline((prev) => [...prev, ...data.events])
@@ -759,6 +795,11 @@ export default function CustomerDetailPage() {
   const filteredEmails = emailStatusFilter === 'all'
     ? emailHistory
     : emailHistory.filter((e) => e.status === emailStatusFilter)
+
+  // Timeline filtered view (client-side event type filter)
+  const filteredTimeline = timelineTypeFilter === 'all'
+    ? timeline
+    : timeline.filter((e) => e.type === timelineTypeFilter)
 
   const canEdit = adminRole === 'super_admin' || adminRole === 'support_l2'
   const canDelete = adminRole === 'super_admin'
@@ -1296,24 +1337,75 @@ export default function CustomerDetailPage() {
 
         {/* Section E: Activity Timeline */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-              Activity Timeline
-              {timelineTotal > 0 && (
-                <span className="ml-2 text-xs font-normal text-gray-400 normal-case">
-                  ({timelineTotal} events)
-                </span>
-              )}
-            </h2>
-            <div className="flex items-center gap-3 text-xs text-gray-400">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />Lockbox</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400 inline-block" />Email</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />Admin</span>
+          {/* Header */}
+          <div className="px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                Activity Timeline
+                {timelineTotal > 0 && (
+                  <span className="ml-2 text-xs font-normal text-gray-400 normal-case">
+                    ({timelineTotal} in period)
+                  </span>
+                )}
+              </h2>
+              {/* Date range selector */}
+              <div className="flex items-center gap-1">
+                {([
+                  { key: '7d',  label: 'Last 7d' },
+                  { key: '30d', label: 'Last 30d' },
+                  { key: '90d', label: 'Last 90d' },
+                  { key: 'all', label: 'All time' },
+                ] as const).map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => handleDateRangeChange(key)}
+                    className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
+                      timelineDateRange === key
+                        ? 'bg-[#0D7377] text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Event type filter tabs */}
+            <div className="flex items-center gap-1 mt-3">
+              {([
+                { key: 'all',           label: 'All',    dot: null },
+                { key: 'lockbox_action',label: 'Lockbox',dot: 'bg-blue-400' },
+                { key: 'email_sent',    label: 'Email',  dot: 'bg-purple-400' },
+                { key: 'admin_action',  label: 'Admin',  dot: 'bg-amber-400' },
+              ] as const).map(({ key, label, dot }) => (
+                <button
+                  key={key}
+                  onClick={() => setTimelineTypeFilter(key)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded font-medium transition-colors ${
+                    timelineTypeFilter === key
+                      ? 'bg-[#0D7377] text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {dot && <span className={`w-1.5 h-1.5 rounded-full ${timelineTypeFilter === key ? 'bg-white' : dot}`} />}
+                  {label}
+                  {key !== 'all' && (
+                    <span className="opacity-70">
+                      ({timeline.filter(e => e.type === key).length})
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
 
-          {timeline.length === 0 ? (
-            <div className="px-5 py-8 text-center text-gray-400 text-sm">No activity recorded.</div>
+          {timelineLoadingMore && timeline.length === 0 ? (
+            <div className="px-5 py-8 text-center text-gray-400 text-sm">Loading...</div>
+          ) : filteredTimeline.length === 0 ? (
+            <div className="px-5 py-8 text-center text-gray-400 text-sm">
+              {timeline.length === 0 ? 'No activity in this period.' : 'No events of this type in this period.'}
+            </div>
           ) : (
             <div className="px-5 py-4">
               <div className="relative">
@@ -1321,7 +1413,7 @@ export default function CustomerDetailPage() {
                 <div className="absolute left-3.5 top-2 bottom-2 w-px bg-gray-200" />
 
                 <div className="space-y-0">
-                  {timeline.map((event) => {
+                  {filteredTimeline.map((event) => {
                     const isLockbox = event.type === 'lockbox_action'
                     const isEmail = event.type === 'email_sent'
                     const dotColor = isLockbox ? 'bg-blue-400' : isEmail ? 'bg-purple-400' : 'bg-amber-400'
@@ -1366,7 +1458,7 @@ export default function CustomerDetailPage() {
                 </div>
               </div>
 
-              {timelineHasMore && (
+              {timelineHasMore && timelineTypeFilter === 'all' && (
                 <div className="mt-2 text-center">
                   <button
                     onClick={loadMoreTimeline}
