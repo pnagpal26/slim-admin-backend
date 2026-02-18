@@ -117,6 +117,32 @@ interface TimelineEvent {
   metadata: Record<string, unknown>
 }
 
+interface CustomerDispute {
+  id: string
+  stripe_dispute_id: string
+  stripe_charge_id: string
+  amount: number
+  currency: string
+  reason: string
+  status: string
+  evidence_due_by: string | null
+  hours_remaining: number | null
+  urgency: 'critical' | 'urgent' | 'warning' | 'normal'
+  resolved_at: string | null
+  created_at: string
+}
+
+interface CustomerRefund {
+  id: string
+  stripe_refund_id: string
+  stripe_charge_id: string
+  amount_refunded: number
+  currency: string
+  reason: string | null
+  status: string
+  created_at: string
+}
+
 const ROLE_LABELS: Record<string, string> = {
   solo_agent: 'Solo Agent',
   team_leader: 'Team Leader',
@@ -200,6 +226,71 @@ function formatTemplateLabel(templateKey: string): string {
 }
 
 
+const DISPUTE_STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+  needs_response:         { label: 'Needs Response', bg: 'bg-red-100',    text: 'text-red-700' },
+  warning_needs_response: { label: 'Needs Response', bg: 'bg-red-100',    text: 'text-red-700' },
+  under_review:           { label: 'Under Review',   bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  warning_under_review:   { label: 'Under Review',   bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  warning_closed:         { label: 'Closed',         bg: 'bg-gray-100',   text: 'text-gray-600' },
+  prevented:              { label: 'Prevented',      bg: 'bg-blue-100',   text: 'text-blue-700' },
+  won:                    { label: 'Won',            bg: 'bg-green-100',  text: 'text-green-700' },
+  lost:                   { label: 'Lost',           bg: 'bg-gray-100',   text: 'text-gray-600' },
+}
+
+const DISPUTE_URGENCY_ROW: Record<string, string> = {
+  critical: 'bg-red-50',
+  urgent:   'bg-orange-50',
+  warning:  'bg-yellow-50/50',
+  normal:   '',
+}
+
+const DISPUTE_REASON_LABELS: Record<string, string> = {
+  bank_cannot_process:        'Bank Cannot Process',
+  check_returned:             'Check Returned',
+  credit_not_processed:       'Credit Not Processed',
+  customer_initiated:         'Customer Initiated',
+  debit_not_authorized:       'Debit Not Authorized',
+  duplicate:                  'Duplicate',
+  fraudulent:                 'Fraudulent',
+  general:                    'General',
+  incorrect_account_details:  'Incorrect Account',
+  insufficient_funds:         'Insufficient Funds',
+  product_not_received:       'Product Not Received',
+  product_unacceptable:       'Product Unacceptable',
+  subscription_canceled:      'Subscription Canceled',
+  unrecognized:               'Unrecognized',
+}
+
+const REFUND_STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+  succeeded: { label: 'Succeeded', bg: 'bg-green-100',  text: 'text-green-700' },
+  pending:   { label: 'Pending',   bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  failed:    { label: 'Failed',    bg: 'bg-red-100',    text: 'text-red-700' },
+  canceled:  { label: 'Canceled',  bg: 'bg-gray-100',   text: 'text-gray-600' },
+}
+
+const REFUND_REASON_LABELS: Record<string, string> = {
+  duplicate:                  'Duplicate',
+  fraudulent:                 'Fraudulent',
+  requested_by_customer:      'Customer Request',
+  expired_uncaptured_charge:  'Uncaptured Charge',
+  unknown:                    'Unknown',
+}
+
+function formatCents(cents: number, currency: string): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+  }).format(cents / 100)
+}
+
+function formatDeadline(hoursRemaining: number | null, evidenceDueBy: string | null): string {
+  if (!evidenceDueBy) return '—'
+  const date = new Date(evidenceDueBy).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  if (hoursRemaining === null || hoursRemaining < 0) return `${date} (past)`
+  if (hoursRemaining < 24) return `${date} (${hoursRemaining}h left)`
+  return `${date} (${Math.floor(hoursRemaining / 24)}d left)`
+}
+
 export default function CustomerDetailPage() {
   const router = useRouter()
   const params = useParams()
@@ -222,6 +313,10 @@ export default function CustomerDetailPage() {
   const [timelineTotal, setTimelineTotal] = useState(0)
   const [timelineDateRange, setTimelineDateRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d')
   const [timelineTypeFilter, setTimelineTypeFilter] = useState<'all' | 'lockbox_action' | 'email_sent' | 'admin_action'>('all')
+  const [disputes, setDisputes] = useState<CustomerDispute[]>([])
+  const [disputesSummary, setDisputesSummary] = useState<{ total: number; action_needed: number } | null>(null)
+  const [refunds, setRefunds] = useState<CustomerRefund[]>([])
+  const [refundsSummary, setRefundsSummary] = useState<{ total: number; total_amount_succeeded: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -312,11 +407,13 @@ export default function CustomerDetailPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [detailRes, emailsRes, lockboxesRes, timelineRes] = await Promise.all([
+        const [detailRes, emailsRes, lockboxesRes, timelineRes, disputesRes, refundsRes] = await Promise.all([
           fetch(`/api/customers/detail?id=${teamId}`, { cache: 'no-store' }),
           fetch(`/api/customers/emails?team_id=${teamId}`, { cache: 'no-store' }),
           fetch(`/api/customers/lockboxes?team_id=${teamId}`, { cache: 'no-store' }),
           fetch(`/api/customers/timeline?team_id=${teamId}&page=0`, { cache: 'no-store' }),
+          fetch(`/api/disputes/list?team_id=${teamId}`, { cache: 'no-store' }),
+          fetch(`/api/refunds/list?team_id=${teamId}`, { cache: 'no-store' }),
         ])
 
         if (!detailRes.ok) {
@@ -349,6 +446,22 @@ export default function CustomerDetailPage() {
           setTimelineHasMore(tData.has_more)
           setTimelinePage(0)
           setTimelineTotal(tData.total)
+        }
+
+        if (disputesRes.ok) {
+          const dData = await disputesRes.json()
+          // Re-sort client-side by most recent first (API returns urgency-first)
+          const sorted = [...(dData.disputes as CustomerDispute[])].sort(
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )
+          setDisputes(sorted)
+          setDisputesSummary({ total: dData.summary.total, action_needed: dData.summary.action_needed })
+        }
+
+        if (refundsRes.ok) {
+          const rData = await refundsRes.json()
+          setRefunds(rData.refunds)
+          setRefundsSummary({ total: rData.summary.total, total_amount_succeeded: rData.summary.total_amount_succeeded })
         }
       } catch {
         setError('Failed to load customer details')
@@ -1389,7 +1502,156 @@ export default function CustomerDetailPage() {
           )}
         </div>
 
-        {/* Section E: Activity Timeline */}
+        {/* Section E: Billing History */}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Billing History</h2>
+          </div>
+
+          {/* Disputes subsection */}
+          <div className="px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-700">Disputes & Chargebacks</h3>
+              {disputesSummary && disputesSummary.total > 0 && (
+                <span className="text-sm text-gray-500">
+                  {disputesSummary.total} dispute{disputesSummary.total !== 1 ? 's' : ''}
+                  {disputesSummary.action_needed > 0 && (
+                    <span className="text-red-600"> · {disputesSummary.action_needed} needs response</span>
+                  )}
+                </span>
+              )}
+            </div>
+
+            {/* Won dispute + account still suspended warning */}
+            {account.account_status !== 'active' && disputes.some((d) => d.status === 'won') && (
+              <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
+                A dispute was won but this account remains suspended. Use the <strong>Re-enable Account</strong> button above to restore access.
+              </div>
+            )}
+
+            {disputes.length === 0 ? (
+              <p className="text-sm text-gray-400">No disputes or chargebacks</p>
+            ) : (
+              <div className="overflow-x-auto -mx-5">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-y border-gray-100 bg-gray-50 text-left">
+                      <th className="px-5 py-2 font-medium text-gray-600">Amount</th>
+                      <th className="px-5 py-2 font-medium text-gray-600">Reason</th>
+                      <th className="px-5 py-2 font-medium text-gray-600">Status</th>
+                      <th className="px-5 py-2 font-medium text-gray-600">Evidence Due</th>
+                      <th className="px-5 py-2 font-medium text-gray-600">Date</th>
+                      <th className="px-5 py-2 font-medium text-gray-600 w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {disputes.map((d) => {
+                      const statusCfg = DISPUTE_STATUS_CONFIG[d.status] ?? { label: d.status, bg: 'bg-gray-100', text: 'text-gray-600' }
+                      const rowBg = DISPUTE_URGENCY_ROW[d.urgency]
+                      return (
+                        <tr key={d.id} className={`border-b border-gray-50 ${rowBg}`}>
+                          <td className="px-5 py-2.5 font-medium">{formatCents(d.amount, d.currency)}</td>
+                          <td className="px-5 py-2.5 text-gray-600">{DISPUTE_REASON_LABELS[d.reason] ?? d.reason}</td>
+                          <td className="px-5 py-2.5">
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusCfg.bg} ${statusCfg.text}`}>
+                              {statusCfg.label}
+                            </span>
+                          </td>
+                          <td className="px-5 py-2.5">
+                            <span className={`text-xs ${
+                              d.urgency === 'critical' ? 'text-red-700 font-medium' :
+                              d.urgency === 'urgent'   ? 'text-orange-700' :
+                              d.urgency === 'warning'  ? 'text-yellow-700' : 'text-gray-600'
+                            }`}>
+                              {formatDeadline(d.hours_remaining, d.evidence_due_by)}
+                            </span>
+                          </td>
+                          <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap">{formatDate(d.created_at)}</td>
+                          <td className="px-5 py-2.5">
+                            <a
+                              href={`https://dashboard.stripe.com/disputes/${d.stripe_dispute_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-gray-400 hover:text-blue-600 transition-colors"
+                              title="View in Stripe"
+                            >
+                              ↗
+                            </a>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Refunds subsection */}
+          <div className="px-5 py-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-700">Refunds</h3>
+              {refundsSummary && refundsSummary.total > 0 && (
+                <span className="text-sm text-gray-500">
+                  {refundsSummary.total} refund{refundsSummary.total !== 1 ? 's' : ''}
+                  {refundsSummary.total_amount_succeeded > 0 && (
+                    <span> · {formatCents(refundsSummary.total_amount_succeeded, 'usd')} refunded</span>
+                  )}
+                </span>
+              )}
+            </div>
+
+            {refunds.length === 0 ? (
+              <p className="text-sm text-gray-400">No refunds issued</p>
+            ) : (
+              <div className="overflow-x-auto -mx-5">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-y border-gray-100 bg-gray-50 text-left">
+                      <th className="px-5 py-2 font-medium text-gray-600">Amount</th>
+                      <th className="px-5 py-2 font-medium text-gray-600">Reason</th>
+                      <th className="px-5 py-2 font-medium text-gray-600">Status</th>
+                      <th className="px-5 py-2 font-medium text-gray-600">Date</th>
+                      <th className="px-5 py-2 font-medium text-gray-600 w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {refunds.map((r) => {
+                      const statusCfg = REFUND_STATUS_CONFIG[r.status] ?? { label: r.status, bg: 'bg-gray-100', text: 'text-gray-600' }
+                      return (
+                        <tr key={r.id} className="border-b border-gray-50">
+                          <td className="px-5 py-2.5 font-medium">{formatCents(r.amount_refunded, r.currency)}</td>
+                          <td className="px-5 py-2.5 text-gray-600">
+                            {r.reason ? (REFUND_REASON_LABELS[r.reason] ?? r.reason) : '—'}
+                          </td>
+                          <td className="px-5 py-2.5">
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusCfg.bg} ${statusCfg.text}`}>
+                              {statusCfg.label}
+                            </span>
+                          </td>
+                          <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap">{formatDate(r.created_at)}</td>
+                          <td className="px-5 py-2.5">
+                            <a
+                              href={`https://dashboard.stripe.com/payments/${r.stripe_charge_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-gray-400 hover:text-blue-600 transition-colors"
+                              title="View in Stripe"
+                            >
+                              ↗
+                            </a>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Section F: Activity Timeline */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           {/* Header */}
           <div className="px-5 py-4 border-b border-gray-100">
