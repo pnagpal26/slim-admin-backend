@@ -645,6 +645,7 @@ export default function CustomerDetailPage() {
   const canEdit = adminRole === 'super_admin' || adminRole === 'support_l2'
   const canDelete = adminRole === 'super_admin'
   const canReEnable = adminRole === 'super_admin' || adminRole === 'support_l2'
+  const isSolo = members.some((m) => m.role === 'solo_agent')
 
   if (loading) {
     return (
@@ -1272,7 +1273,9 @@ export default function CustomerDetailPage() {
               <>
                 <div className="space-y-3 mb-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Team Name</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {isSolo ? 'Account Name' : 'Team Name'}
+                    </label>
                     <input
                       type="text"
                       value={editTeamName}
@@ -1282,7 +1285,7 @@ export default function CustomerDetailPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Leader First Name</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
                       <input
                         type="text"
                         value={editLeaderFirstName}
@@ -1291,7 +1294,7 @@ export default function CustomerDetailPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Leader Last Name</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
                       <input
                         type="text"
                         value={editLeaderLastName}
@@ -1301,7 +1304,7 @@ export default function CustomerDetailPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Leader Email</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                     <input
                       type="email"
                       value={editLeaderEmail}
@@ -1310,7 +1313,7 @@ export default function CustomerDetailPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Leader Phone (optional)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone (optional)</label>
                     <input
                       type="tel"
                       value={editLeaderPhone}
