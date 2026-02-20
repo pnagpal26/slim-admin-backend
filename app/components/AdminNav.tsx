@@ -11,10 +11,11 @@ export function AdminNav({ active, role }: AdminNavProps) {
     { href: '/customers',   key: 'customers',   label: 'Customers' },
     { href: '/disputes',    key: 'disputes',    label: 'Disputes' },
     { href: '/refunds',     key: 'refunds',     label: 'Refunds' },
-    { href: '/alerts',      key: 'alerts',      label: 'Alerts' },
-    { href: '/errors',      key: 'errors',      label: 'Errors' },
-    { href: '/audit',       key: 'audit',       label: 'Audit Log' },
-    { href: '/admin-users', key: 'admin-users', label: 'Admin Users', superAdminOnly: true },
+    { href: '/alerts',       key: 'alerts',       label: 'Alerts' },
+    { href: '/errors',       key: 'errors',       label: 'Errors' },
+    { href: '/audit',        key: 'audit',        label: 'Audit Log' },
+    { href: '/promo-codes',  key: 'promo-codes',  label: 'Promo Codes' },
+    { href: '/admin-users',  key: 'admin-users',  label: 'Admin Users', superAdminOnly: true },
   ]
 
   return (

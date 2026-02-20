@@ -59,6 +59,6 @@ export async function getSecret(key: string): Promise<string> {
     return value
   }
 
-  // Dev/test: fall back to process.env
-  return value || process.env[key] || ''
+  // Dev/test: prefer process.env (local overrides) over AWS
+  return process.env[key] || value || ''
 }

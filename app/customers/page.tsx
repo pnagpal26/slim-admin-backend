@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { TIER_LABELS, PLAN_TIERS, STATUS_COLORS, STATUS_LABELS } from '@/lib/constants'
-import { AdminNav } from '@/app/components/AdminNav'
 
 interface Customer {
   id: string
@@ -16,7 +15,6 @@ interface Customer {
   last_login: string | null
   status: string
   member_count: number
-  bounce_count: number
 }
 
 const STATUSES = [
@@ -179,7 +177,16 @@ function CustomersContent() {
         </div>
       </header>
 
-      <AdminNav active="customers" role={admin?.role ?? null} />
+      <nav className="bg-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 flex gap-6 text-sm">
+          <a href="/dashboard" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Dashboard</a>
+          <a href="/customers" className="py-2.5 border-b-2 border-[#0D7377] text-[#0D7377] font-medium">Customers</a>
+          <a href="/alerts" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Alerts</a>
+          <a href="/errors" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Errors</a>
+          <a href="/audit" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Audit Log</a>
+          <a href="/promo-codes" className="py-2.5 border-b-2 border-transparent text-gray-500 hover:text-gray-700">Promo Codes</a>
+        </div>
+      </nav>
 
       <main className="max-w-7xl mx-auto px-4 py-6">
         {/* Success message */}
@@ -230,19 +237,9 @@ function CustomersContent() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50 text-left">
-                  <th
-                    className="px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none"
-                    onClick={() => handleSort('team_name')}
-                  >
-                    Name{sortIndicator('team_name')}
-                  </th>
+                  <th className="px-4 py-3 font-medium text-gray-600">Team Name</th>
                   <th className="px-4 py-3 font-medium text-gray-600">Contact Email</th>
-                  <th
-                    className="px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none"
-                    onClick={() => handleSort('plan_tier')}
-                  >
-                    Plan{sortIndicator('plan_tier')}
-                  </th>
+                  <th className="px-4 py-3 font-medium text-gray-600">Plan</th>
                   <th
                     className="px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none"
                     onClick={() => handleSort('signup_date')}
@@ -255,30 +252,19 @@ function CustomersContent() {
                   >
                     Last Login{sortIndicator('last_login')}
                   </th>
-                  <th
-                    className="px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none text-center group relative"
-                    onClick={() => handleSort('bounce_count')}
-                  >
-                    <span className="relative">
-                      Bounces{sortIndicator('bounce_count')}
-                      <span className="invisible group-hover:visible absolute left-1/2 -translate-x-1/2 top-full mt-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-10">
-                        Bounced emails in last 30 days
-                      </span>
-                    </span>
-                  </th>
                   <th className="px-4 py-3 font-medium text-gray-600">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
+                    <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
                       Loading...
                     </td>
                   </tr>
                 ) : customers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
+                    <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
                       No customers found.
                     </td>
                   </tr>
@@ -301,22 +287,6 @@ function CustomersContent() {
                       </td>
                       <td className="px-4 py-3 text-gray-600">{formatDate(c.signup_date)}</td>
                       <td className="px-4 py-3 text-gray-600">{formatRelative(c.last_login)}</td>
-                      <td className="px-4 py-3 text-center">
-                        {c.bounce_count > 0 ? (
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
-                            c.bounce_count >= 5
-                              ? 'bg-red-100 text-red-700 font-semibold'
-                              : c.bounce_count >= 2
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-gray-100 text-gray-600'
-                          }`}>
-                            {c.bounce_count >= 5 && '⚠️ '}
-                            {c.bounce_count}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[c.status] || 'bg-gray-100 text-gray-600'}`}>
                           {STATUS_LABELS[c.status] || c.status}

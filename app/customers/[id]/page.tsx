@@ -326,12 +326,20 @@ export default function CustomerDetailPage() {
 
   // Modal state — extend trial / comp month
   const [showExtendTrial, setShowExtendTrial] = useState(false)
-  const [showCompMonth, setShowCompMonth] = useState(false)
+  const [showApplyPromo, setShowApplyPromo] = useState(false)
+  const [showApplyCredit, setShowApplyCredit] = useState(false)
   const [modalDays, setModalDays] = useState('7')
   const [modalReason, setModalReason] = useState('')
   const [modalLoading, setModalLoading] = useState(false)
   const [modalError, setModalError] = useState('')
   const [modalSuccess, setModalSuccess] = useState('')
+  // Apply promo state
+  const [promoCodeInput, setPromoCodeInput] = useState('')
+  const [promoForce, setPromoForce] = useState(false)
+  const [promoRequiresForce, setPromoRequiresForce] = useState(false)
+  // Apply credit state
+  const [creditAmount, setCreditAmount] = useState('')
+  const [creditReason, setCreditReason] = useState('')
 
   // Edit modal state
   const [showEdit, setShowEdit] = useState(false)
@@ -514,19 +522,46 @@ export default function CustomerDetailPage() {
     }
   }
 
-  async function handleCompMonth() {
+  async function handleApplyPromo() {
+    setModalError('')
+    setModalSuccess('')
+    setPromoRequiresForce(false)
+    setModalLoading(true)
+    try {
+      const res = await fetch('/api/customers/apply-promo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId, code: promoCodeInput.toUpperCase().trim(), force: promoForce }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        if (data.requiresForce) setPromoRequiresForce(true)
+        setModalError(data.error)
+        return
+      }
+      setModalSuccess(data.type === 'extended_trial'
+        ? `Trial extended. New end: ${formatDate(data.trial_ends_at)}`
+        : 'Discount code applied. It will be applied at next checkout.')
+    } catch {
+      setModalError('Network error')
+    } finally {
+      setModalLoading(false)
+    }
+  }
+
+  async function handleApplyCredit() {
     setModalError('')
     setModalSuccess('')
     setModalLoading(true)
     try {
-      const res = await fetch('/api/customers/comp-month', {
+      const res = await fetch('/api/customers/apply-credit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teamId, reason: modalReason }),
+        body: JSON.stringify({ teamId, amountCents: creditAmount, reason: creditReason }),
       })
       const data = await res.json()
       if (!res.ok) { setModalError(data.error); return }
-      setModalSuccess(`Month comped. New period end: ${formatDate(data.new_period_end)}`)
+      setModalSuccess(`Credit of $${(parseInt(creditAmount) / 100).toFixed(2)} CAD applied successfully.`)
     } catch {
       setModalError('Network error')
     } finally {
@@ -536,11 +571,17 @@ export default function CustomerDetailPage() {
 
   function closeModal() {
     setShowExtendTrial(false)
-    setShowCompMonth(false)
+    setShowApplyPromo(false)
+    setShowApplyCredit(false)
     setModalDays('7')
     setModalReason('')
     setModalError('')
     setModalSuccess('')
+    setPromoCodeInput('')
+    setPromoForce(false)
+    setPromoRequiresForce(false)
+    setCreditAmount('')
+    setCreditReason('')
   }
 
   function openEditModal() {
@@ -1027,12 +1068,20 @@ export default function CustomerDetailPage() {
                   Extend Trial
                 </button>
               )}
-              {account.status === 'active_paid' && (
+              {canEdit && (
                 <button
-                  onClick={() => { closeModal(); setShowCompMonth(true) }}
+                  onClick={() => { closeModal(); setShowApplyPromo(true) }}
                   className="px-3 py-1.5 text-sm rounded border border-white/30 text-white bg-white/15 hover:bg-white/25 transition-colors"
                 >
-                  Comp 1 Month
+                  Apply Promo Code
+                </button>
+              )}
+              {account.status === 'active_paid' && canEdit && (
+                <button
+                  onClick={() => { closeModal(); setShowApplyCredit(true) }}
+                  className="px-3 py-1.5 text-sm rounded border border-white/30 text-white bg-white/15 hover:bg-white/25 transition-colors"
+                >
+                  Apply Credit
                 </button>
               )}
               {canEdit && account.account_status === 'active' && (
@@ -1871,14 +1920,13 @@ export default function CustomerDetailPage() {
         </div>
       )}
 
-      {/* Comp 1 Month Modal */}
-      {showCompMonth && (
+      {/* Apply Promo Code Modal */}
+      {showApplyPromo && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={closeModal}>
           <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Comp 1 Month</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Apply Promo Code</h3>
             <p className="text-sm text-gray-500 mb-4">
-              Grant 30 free days to <strong>{account.team_name}</strong>.
-              This extends their current billing period.
+              Apply a promo code to <strong>{account?.team_name}</strong>.
             </p>
             {modalError && (
               <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mb-3">{modalError}</div>
@@ -1889,34 +1937,95 @@ export default function CustomerDetailPage() {
             {!modalSuccess && (
               <>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Reason (required)</label>
-                  <textarea
-                    value={modalReason}
-                    onChange={(e) => setModalReason(e.target.value)}
-                    rows={2}
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Why is this month being comped?"
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Promo Code</label>
+                  <input
+                    type="text"
+                    value={promoCodeInput}
+                    onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+                    placeholder="e.g. WELCOME30"
+                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+                {promoRequiresForce && (
+                  <label className="flex items-center gap-2 mb-4 cursor-pointer">
+                    <input type="checkbox" checked={promoForce} onChange={e => setPromoForce(e.target.checked)} className="rounded" />
+                    <span className="text-sm text-red-600">Override restriction and apply anyway</span>
+                  </label>
+                )}
                 <div className="flex justify-end gap-2">
-                  <button onClick={closeModal} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
-                    Cancel
-                  </button>
+                  <button onClick={closeModal} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
                   <button
-                    onClick={handleCompMonth}
-                    disabled={modalLoading || !modalReason.trim()}
-                    className="px-4 py-2 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleApplyPromo}
+                    disabled={modalLoading || !promoCodeInput.trim()}
+                    className="px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {modalLoading ? 'Processing...' : 'Comp 1 Month'}
+                    {modalLoading ? 'Applying...' : 'Apply Code'}
                   </button>
                 </div>
               </>
             )}
             {modalSuccess && (
               <div className="flex justify-end">
-                <button onClick={closeModal} className="px-4 py-2 text-sm rounded bg-[#0D7377] text-white hover:bg-[#0B6163]">
-                  Done
-                </button>
+                <button onClick={closeModal} className="px-4 py-2 text-sm rounded bg-[#0D7377] text-white hover:bg-[#0B6163]">Done</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Apply Credit Modal */}
+      {showApplyCredit && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={closeModal}>
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Apply Credit</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Apply a CAD credit to <strong>{account?.team_name}</strong>&apos;s Stripe balance. This will offset future invoices.
+            </p>
+            {modalError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mb-3">{modalError}</div>
+            )}
+            {modalSuccess && (
+              <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded px-3 py-2 mb-3">{modalSuccess}</div>
+            )}
+            {!modalSuccess && (
+              <>
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount (cents CAD)</label>
+                  <input
+                    type="number"
+                    value={creditAmount}
+                    onChange={(e) => setCreditAmount(e.target.value)}
+                    placeholder="e.g. 449 = $4.49"
+                    min="1" max="100000"
+                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {creditAmount && <p className="text-xs text-gray-500 mt-1">${(parseInt(creditAmount) / 100).toFixed(2)} CAD</p>}
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Reason (required)</label>
+                  <textarea
+                    value={creditReason}
+                    onChange={(e) => setCreditReason(e.target.value)}
+                    rows={2}
+                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Why is this credit being applied?"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button onClick={closeModal} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+                  <button
+                    onClick={handleApplyCredit}
+                    disabled={modalLoading || !creditAmount || !creditReason.trim()}
+                    className="px-4 py-2 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {modalLoading ? 'Applying...' : 'Apply Credit'}
+                  </button>
+                </div>
+              </>
+            )}
+            {modalSuccess && (
+              <div className="flex justify-end">
+                <button onClick={closeModal} className="px-4 py-2 text-sm rounded bg-[#0D7377] text-white hover:bg-[#0B6163]">Done</button>
               </div>
             )}
           </div>

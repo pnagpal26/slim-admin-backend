@@ -33,6 +33,14 @@ const PERMISSIONS = {
   view_alerts: ['super_admin', 'support_l1', 'support_l2'],
   view_error_log: ['super_admin', 'support_l1', 'support_l2'],
   view_audit_history: ['super_admin', 'support_l1', 'support_l2'],
+
+  // Promo codes
+  view_promo_codes: ['super_admin', 'support_l1', 'support_l2'],
+  create_promo_code: ['super_admin', 'support_l2'],
+  edit_promo_code: ['super_admin', 'support_l2'],
+  deactivate_promo_code: ['super_admin', 'support_l2'],
+  apply_promo_code: ['super_admin', 'support_l2'],
+  apply_credit: ['super_admin', 'support_l2'],
 } as const
 
 export type Permission = keyof typeof PERMISSIONS
